@@ -34,14 +34,14 @@ public static class AdvanceEndpoints
 
         member.MapGet("/advances", (Guid year_id, UtsavDbContext db, CancellationToken ct) =>
             QueryAsync(db, "SELECT * FROM v_advance_balances WHERE year_id=@year AND org_id=@org ORDER BY created_at DESC",
-                [P("@year", year_id), Org()], ct));
+                [P("@year", year_id), Org(db)], ct));
 
         write.MapPost("/advances", CreateAsync);
         write.MapPatch("/advances/{id:guid}", UpdateAsync);
 
         member.MapGet("/advances/{id:guid}/settlements", (Guid id, UtsavDbContext db, CancellationToken ct) =>
             QueryAsync(db, "SELECT * FROM advance_settlements WHERE advance_id=@id AND org_id=@org ORDER BY created_at",
-                [P("@id", id), Org()], ct));
+                [P("@id", id), Org(db)], ct));
 
         write.MapPost("/advances/{id:guid}/settle", SettleAsync);
         write.MapDelete("/advance_settlements/{id:guid}", DeleteSettlementAsync);
@@ -68,7 +68,7 @@ public static class AdvanceEndpoints
             VALUES (@id, @org, @year, @name, @collector, @amount, @issuedOn, @purpose, @issuedBy, @mode, @notes)
             """,
             [
-                P("@id", id), Org(), P("@year", yearId.GetGuid()), P("@name", issuedTo),
+                P("@id", id), Org(db), P("@year", yearId.GetGuid()), P("@name", issuedTo),
                 P("@collector", Opt(body, "issued_to_collector_id")), P("@amount", amountElement.GetDecimal()),
                 P("@issuedOn", Opt(body, "issued_on")), P("@purpose", Opt(body, "purpose")),
                 P("@issuedBy", Opt(body, "issued_by")), P("@mode", Opt(body, "mode")), P("@notes", Opt(body, "notes")),
@@ -90,7 +90,7 @@ public static class AdvanceEndpoints
 
         var assignments = string.Join(", ", supplied.Select((p, i) => $"[{p.Name}] = @p{i}"));
         var parameters = supplied.Select((p, i) => P($"@p{i}", SqlValue.FromJson(p.Value)))
-            .Append(P("@id", id)).Append(Org()).ToArray();
+            .Append(P("@id", id)).Append(Org(db)).ToArray();
 
         await DynamicSql.ExecuteAsync(db, $"UPDATE advances SET {assignments} WHERE id = @id AND org_id = @org;", parameters, ct);
 
@@ -103,7 +103,7 @@ public static class AdvanceEndpoints
     private static async Task<IResult> SettleAsync(Guid id, JsonElement body, UtsavDbContext db, CancellationToken ct)
     {
         var advance = (await QueryAsync(db, "SELECT * FROM advances WHERE id=@id AND org_id=@org",
-            [P("@id", id), Org()], ct)).FirstOrDefault();
+            [P("@id", id), Org(db)], ct)).FirstOrDefault();
         if (advance is null)
         {
             return Results.Json(new { error = "Advance not found" }, statusCode: 404);
@@ -139,7 +139,7 @@ public static class AdvanceEndpoints
                     VALUES (@id, @org, @year, @category, @details, @amount, @spentOn, @mode, @comment, @vendor, @billNo, @advance)
                     """,
                     [
-                        P("@id", expenseId.Value), Org(), P("@year", advance["year_id"]!),
+                        P("@id", expenseId.Value), Org(db), P("@year", advance["year_id"]!),
                         P("@category", Opt(body, "category")), P("@details", Opt(body, "details")),
                         P("@amount", amount), P("@spentOn", Opt(body, "spent_on")), P("@mode", Opt(body, "mode")),
                         P("@comment", Opt(body, "comment")), P("@vendor", Opt(body, "vendor_id")),
@@ -152,7 +152,7 @@ public static class AdvanceEndpoints
                 VALUES (@id, @org, @advance, @kind, @expense, @amount, @settledOn, @note)
                 """,
                 [
-                    P("@id", Guid.NewGuid()), Org(), P("@advance", id), P("@kind", kind!),
+                    P("@id", Guid.NewGuid()), Org(db), P("@advance", id), P("@kind", kind!),
                     P("@expense", expenseId.HasValue ? expenseId.Value : DBNull.Value),
                     P("@amount", amount), P("@settledOn", Opt(body, "settled_on")), P("@note", Opt(body, "note")),
                 ], ct);
@@ -163,7 +163,7 @@ public static class AdvanceEndpoints
                 UPDATE advances SET status = 'settled'
                  WHERE id = @id AND org_id = @org AND status = 'open'
                    AND (SELECT outstanding FROM v_advance_balances WHERE id = @id AND org_id = @org) <= 0.01
-                """, [P("@id", id), Org()], ct);
+                """, [P("@id", id), Org(db)], ct);
 
             await transaction.CommitAsync(ct);
         });
@@ -174,7 +174,7 @@ public static class AdvanceEndpoints
     private static async Task<IResult> DeleteSettlementAsync(Guid id, UtsavDbContext db, CancellationToken ct)
     {
         var settlement = (await QueryAsync(db, "SELECT * FROM advance_settlements WHERE id=@id AND org_id=@org",
-            [P("@id", id), Org()], ct)).FirstOrDefault();
+            [P("@id", id), Org(db)], ct)).FirstOrDefault();
         if (settlement is null)
         {
             return Results.Json(new { error = "Not found" }, statusCode: 404);
@@ -188,11 +188,11 @@ public static class AdvanceEndpoints
         {
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
-            await DynamicSql.ExecuteAsync(db, "DELETE FROM advance_settlements WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+            await DynamicSql.ExecuteAsync(db, "DELETE FROM advance_settlements WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 
             if (expenseId is Guid expense)
             {
-                await DynamicSql.ExecuteAsync(db, "DELETE FROM expenses WHERE id=@id AND org_id=@org", [P("@id", expense), Org()], ct);
+                await DynamicSql.ExecuteAsync(db, "DELETE FROM expenses WHERE id=@id AND org_id=@org", [P("@id", expense), Org(db)], ct);
             }
 
             // Reopen the advance if it had auto-closed and is no longer covered.
@@ -200,7 +200,7 @@ public static class AdvanceEndpoints
                 UPDATE advances SET status = 'open'
                  WHERE id = @id AND org_id = @org AND status = 'settled'
                    AND (SELECT outstanding FROM v_advance_balances WHERE id = @id AND org_id = @org) > 0.01
-                """, [P("@id", advanceId), Org()], ct);
+                """, [P("@id", advanceId), Org(db)], ct);
 
             await transaction.CommitAsync(ct);
         });
@@ -213,7 +213,7 @@ public static class AdvanceEndpoints
         var session = (SessionPayload)http.Items[nameof(SessionPayload)]!;
 
         var collector = (await QueryAsync(db, "SELECT id FROM collectors WHERE user_id=@user AND org_id=@org",
-            [P("@user", session.User.Id), Org()], ct)).FirstOrDefault();
+            [P("@user", session.User.Id), Org(db)], ct)).FirstOrDefault();
 
         // Not linked to a collector — the Dashboard hides the tile entirely.
         if (collector is null)
@@ -224,7 +224,7 @@ public static class AdvanceEndpoints
         var rows = await QueryAsync(db, """
             SELECT outstanding FROM v_advance_balances
              WHERE issued_to_collector_id=@collector AND year_id=@year AND org_id=@org AND status='open'
-            """, [P("@collector", collector["id"]!), P("@year", year_id), Org()], ct);
+            """, [P("@collector", collector["id"]!), P("@year", year_id), Org(db)], ct);
 
         return Results.Ok(new
         {
@@ -234,11 +234,11 @@ public static class AdvanceEndpoints
     }
 
     private static Task<List<Dictionary<string, object?>>> BalanceRowAsync(UtsavDbContext db, Guid id, CancellationToken ct) =>
-        QueryAsync(db, "SELECT * FROM v_advance_balances WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        QueryAsync(db, "SELECT * FROM v_advance_balances WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 
     internal static SqlParameter P(string name, object value) => new(name, value);
 
-    internal static SqlParameter Org() => new("@org", SessionService.DefaultOrgId);
+    internal static SqlParameter Org(UtsavDbContext db) => new("@org", db.TenantId);
 
     internal static object Opt(JsonElement body, string name) =>
         body.ValueKind == JsonValueKind.Object && body.TryGetProperty(name, out var value)

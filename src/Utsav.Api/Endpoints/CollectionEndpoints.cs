@@ -44,7 +44,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> ForYearAsync(Guid year_id, string? parent_type, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.CollectionPayments.AsNoTracking()
-            .Where(p => p.OrgId == SessionService.DefaultOrgId && p.YearId == year_id
+            .Where(p => p.OrgId == db.TenantId && p.YearId == year_id
                 && (parent_type == null || p.ParentType == parent_type))
             .Select(p => new { parent_id = p.ParentId, amount = p.Amount, paid_on = p.PaidOn, mode = p.Mode })
             .ToListAsync(ct);
@@ -85,7 +85,7 @@ public static class CollectionEndpoints
                            ELSE 'other' END
             """;
 
-        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", SessionService.DefaultOrgId) };
+        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", db.TenantId) };
         if (!string.IsNullOrEmpty(from)) parameters.Add(new SqlParameter("@from", from));
         if (!string.IsNullOrEmpty(to)) parameters.Add(new SqlParameter("@to", to));
 
@@ -118,7 +118,7 @@ public static class CollectionEndpoints
              GROUP BY COALESCE(z.name, 'No zone')
             """;
 
-        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", SessionService.DefaultOrgId) };
+        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", db.TenantId) };
         if (!string.IsNullOrEmpty(from)) parameters.Add(new SqlParameter("@from", from));
         if (!string.IsNullOrEmpty(to)) parameters.Add(new SqlParameter("@to", to));
 
@@ -160,7 +160,7 @@ public static class CollectionEndpoints
              ORDER BY cp.paid_on
             """;
 
-        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", SessionService.DefaultOrgId) };
+        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", db.TenantId) };
         if (!string.IsNullOrEmpty(from)) parameters.Add(new SqlParameter("@from", from));
         if (!string.IsNullOrEmpty(to)) parameters.Add(new SqlParameter("@to", to));
 
@@ -202,7 +202,7 @@ public static class CollectionEndpoints
                            ELSE 'other' END
             """;
 
-        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", SessionService.DefaultOrgId) };
+        var parameters = new List<SqlParameter> { new("@year", year_id), new("@org", db.TenantId) };
         if (!string.IsNullOrEmpty(from)) parameters.Add(new SqlParameter("@from", from));
         if (!string.IsNullOrEmpty(to)) parameters.Add(new SqlParameter("@to", to));
 
@@ -220,7 +220,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> ListAsync(string parent_type, Guid parent_id, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.CollectionPayments.AsNoTracking()
-            .Where(p => p.OrgId == SessionService.DefaultOrgId && p.ParentType == parent_type && p.ParentId == parent_id)
+            .Where(p => p.OrgId == db.TenantId && p.ParentType == parent_type && p.ParentId == parent_id)
             .OrderBy(p => p.PaidOn)
             .Select(p => new
             {

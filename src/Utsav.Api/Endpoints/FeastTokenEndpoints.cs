@@ -63,8 +63,8 @@ public static class FeastTokenEndpoints
              ORDER BY ft.seq_no ASC
             """,
             string.IsNullOrWhiteSpace(status)
-                ? [P("@year", year_id), Org()]
-                : [P("@year", year_id), Org(), P("@status", status)],
+                ? [P("@year", year_id), Org(db)]
+                : [P("@year", year_id), Org(db), P("@status", status)],
             ct);
 
         return Results.Ok(rows);
@@ -88,7 +88,7 @@ public static class FeastTokenEndpoints
     {
         var rows = await QueryAsync(db,
             "SELECT status, COUNT(*) AS count FROM feast_tokens WHERE org_id = @org AND year_id = @year GROUP BY status",
-            [P("@year", year_id), Org()], ct);
+            [P("@year", year_id), Org(db)], ct);
 
         var counts = new Dictionary<string, int>
         {
@@ -140,12 +140,12 @@ public static class FeastTokenEndpoints
             return Results.Json(new { error = $"count must be between 1 and {MaxPrintCount}" }, statusCode: 400);
         }
 
-        var org = SessionService.DefaultOrgId;
+        var org = db.TenantId;
         var yearRow = (await QueryAsync(db, """
             SELECT py.year, o.name AS org_name
               FROM puja_years py JOIN organizations o ON o.id = py.org_id
              WHERE py.id = @year AND py.org_id = @org
-            """, [P("@year", yearId), Org()], ct)).FirstOrDefault();
+            """, [P("@year", yearId), Org(db)], ct)).FirstOrDefault();
 
         if (yearRow is null)
         {
@@ -166,7 +166,7 @@ public static class FeastTokenEndpoints
             // starting point.
             var maxRow = await QueryAsync(db,
                 "SELECT ISNULL(MAX(seq_no), 0) AS max_seq FROM feast_tokens WITH (UPDLOCK, HOLDLOCK) WHERE org_id = @org AND year_id = @year",
-                [P("@year", yearId), Org()], ct);
+                [P("@year", yearId), Org(db)], ct);
             var startSeq = Convert.ToInt32(maxRow.FirstOrDefault()?["max_seq"] ?? 0);
 
             created = Enumerable.Range(1, count).Select(i => new FeastToken
@@ -192,7 +192,7 @@ public static class FeastTokenEndpoints
                 ["count"] = created.Count,
                 ["from_code"] = created[0].Code,
                 ["to_code"] = created[^1].Code,
-            }, ct);
+            }, org, ct);
 
             await transaction.CommitAsync(ct);
         });
@@ -227,7 +227,7 @@ public static class FeastTokenEndpoints
             SELECT f.year_id, d.name AS donor_name, d.surname AS donor_surname
               FROM feasts f JOIN donors d ON d.id = f.donor_id
              WHERE f.id = @id AND f.org_id = @org
-            """, [P("@id", feastId), Org()], ct)).FirstOrDefault();
+            """, [P("@id", feastId), Org(db)], ct)).FirstOrDefault();
 
         if (feast is null)
         {
@@ -252,7 +252,7 @@ public static class FeastTokenEndpoints
             """,
             [
                 P("@feast_id", feastId), P("@status", FeastTokenStatus.Assigned), P("@assigned_at", DateTime.UtcNow),
-                P("@id", (Guid)token["id"]!), Org(),
+                P("@id", (Guid)token["id"]!), Org(db),
             ], ct);
 
         if (rows == 0)
@@ -315,7 +315,7 @@ public static class FeastTokenEndpoints
             [
                 P("@status", FeastTokenStatus.Redeemed), P("@redeemed_at", DateTime.UtcNow),
                 P("@redeemed_by_user_id", (object?)userId ?? DBNull.Value), P("@redeemed_by_name", (object?)userName ?? DBNull.Value),
-                P("@id", (Guid)token["id"]!), Org(),
+                P("@id", (Guid)token["id"]!), Org(db),
             ], ct);
 
         if (rows == 0)
@@ -346,7 +346,7 @@ public static class FeastTokenEndpoints
 
         var rows = await DynamicSql.ExecuteAsync(db,
             $"UPDATE feast_tokens SET status = @status WHERE id = @id AND org_id = @org AND status <> '{FeastTokenStatus.Void}'",
-            [P("@status", FeastTokenStatus.Void), P("@id", (Guid)token["id"]!), Org()], ct);
+            [P("@status", FeastTokenStatus.Void), P("@id", (Guid)token["id"]!), Org(db)], ct);
 
         if (rows == 0)
         {
@@ -363,7 +363,7 @@ public static class FeastTokenEndpoints
               LEFT JOIN feasts f ON f.id = ft.feast_id
               LEFT JOIN donors d ON d.id = f.donor_id
              WHERE ft.code = @code AND ft.org_id = @org
-            """, [P("@code", code), Org()], ct);
+            """, [P("@code", code), Org(db)], ct);
 
     private static Task<List<Dictionary<string, object?>>> TokenDetailAsync(UtsavDbContext db, Guid id, CancellationToken ct) =>
         QueryAsync(db, """
@@ -372,7 +372,7 @@ public static class FeastTokenEndpoints
               LEFT JOIN feasts f ON f.id = ft.feast_id
               LEFT JOIN donors d ON d.id = f.donor_id
              WHERE ft.id = @id AND ft.org_id = @org
-            """, [P("@id", id), Org()], ct);
+            """, [P("@id", id), Org(db)], ct);
 
     private static string? DonorLabel(Dictionary<string, object?> row) =>
         row.GetValueOrDefault("donor_name") is string name

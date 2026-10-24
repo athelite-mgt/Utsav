@@ -39,7 +39,7 @@ public static class DocumentEndpoints
 
     private static async Task<IResult> ListAsync(Guid? year_id, UtsavDbContext db, CancellationToken ct)
     {
-        var query = db.Documents.Where(d => d.OrgId == SessionService.DefaultOrgId);
+        var query = db.Documents.Where(d => d.OrgId == db.TenantId);
         if (year_id is { } y)
         {
             query = query.Where(d => d.YearId == y || d.YearId == null);
@@ -102,7 +102,7 @@ public static class DocumentEndpoints
 
         // Org-prefixed and randomised so two committees (or two uploads of a
         // same-named file) never collide in the one shared container.
-        var blobName = $"{SessionService.DefaultOrgId}/{Guid.NewGuid()}-{Path.GetFileName(file.FileName)}";
+        var blobName = $"{db.TenantId}/{Guid.NewGuid()}-{Path.GetFileName(file.FileName)}";
 
         await using (var stream = file.OpenReadStream())
         {
@@ -115,7 +115,7 @@ public static class DocumentEndpoints
             VALUES (@id, @org, @year, @contract, @title, @category, @notes, @file_name, @blob_name, @content_type, @size, @uploaded_by)
             """,
             [
-                P("@id", id), Org(), P("@year", (object?)yearId ?? DBNull.Value), P("@contract", (object?)contractId ?? DBNull.Value),
+                P("@id", id), Org(db), P("@year", (object?)yearId ?? DBNull.Value), P("@contract", (object?)contractId ?? DBNull.Value),
                 P("@title", title.Trim()), P("@category", (object?)category ?? DBNull.Value), P("@notes", (object?)notes ?? DBNull.Value),
                 P("@file_name", file.FileName), P("@blob_name", blobName), P("@content_type", file.ContentType),
                 P("@size", file.Length), P("@uploaded_by", session.User.Id),
@@ -132,7 +132,7 @@ public static class DocumentEndpoints
     private static async Task<IResult> DownloadAsync(Guid id, UtsavDbContext db, IBlobStorageService storage, CancellationToken ct)
     {
         var doc = await db.Documents.AsNoTracking()
-            .SingleOrDefaultAsync(d => d.Id == id && d.OrgId == SessionService.DefaultOrgId, ct);
+            .SingleOrDefaultAsync(d => d.Id == id && d.OrgId == db.TenantId, ct);
         if (doc is null)
         {
             return Results.NotFound();
@@ -151,13 +151,13 @@ public static class DocumentEndpoints
         Guid id, UtsavDbContext db, IBlobStorageService storage, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var doc = await db.Documents.AsNoTracking()
-            .SingleOrDefaultAsync(d => d.Id == id && d.OrgId == SessionService.DefaultOrgId, ct);
+            .SingleOrDefaultAsync(d => d.Id == id && d.OrgId == db.TenantId, ct);
         if (doc is null)
         {
             return Results.NotFound();
         }
 
-        await DynamicSql.ExecuteAsync(db, "DELETE FROM documents WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        await DynamicSql.ExecuteAsync(db, "DELETE FROM documents WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 
         // The row is the source of truth; a failed blob cleanup afterwards
         // leaves an orphaned file, not a broken app state, so it's logged and

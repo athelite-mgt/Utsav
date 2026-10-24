@@ -23,7 +23,7 @@ public static class PujaCalendarEndpoints
     private static async Task<IResult> ListAsync(Guid year_id, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.PujaCalendarDays.AsNoTracking()
-            .Where(d => d.OrgId == SessionService.DefaultOrgId && d.YearId == year_id)
+            .Where(d => d.OrgId == db.TenantId && d.YearId == year_id)
             .OrderBy(d => d.SortOrder).ThenBy(d => d.EventDate)
             .Select(d => new
             {

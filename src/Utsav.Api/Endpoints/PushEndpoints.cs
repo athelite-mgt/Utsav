@@ -76,7 +76,7 @@ public static class PushEndpoints
             VALUES (@id, @org, @user, @endpoint, @p256dh, @auth, @ua)
             """,
             [
-                P("@id", Guid.NewGuid()), Org(), P("@user", session.User.Id), P("@endpoint", endpoint),
+                P("@id", Guid.NewGuid()), Org(db), P("@user", session.User.Id), P("@endpoint", endpoint),
                 P("@p256dh", p256dh), P("@auth", auth), P("@ua", string.IsNullOrEmpty(userAgent) ? DBNull.Value : userAgent),
             ], ct);
 
@@ -91,7 +91,7 @@ public static class PushEndpoints
         }
 
         await DynamicSql.ExecuteAsync(db, "DELETE FROM push_subscriptions WHERE endpoint=@endpoint AND org_id=@org",
-            [P("@endpoint", endpoint), Org()], ct);
+            [P("@endpoint", endpoint), Org(db)], ct);
         return Results.Ok(new { ok = true });
     }
 
@@ -151,7 +151,8 @@ public static class PushEndpoints
     /// queued through the same channel a transaction update uses rather than
     /// sent inline — one slow/failed device shouldn't hold up the request.
     /// </summary>
-    private static async Task<IResult> AnnounceAsync(JsonElement body, HttpContext http, IPushDispatcher dispatcher, CancellationToken ct)
+    private static async Task<IResult> AnnounceAsync(
+        JsonElement body, HttpContext http, IPushDispatcher dispatcher, Utsav.Domain.Tenancy.ITenantContext tenant, CancellationToken ct)
     {
         if (!TryString(body, "title", out var title) || !TryString(body, "body", out var messageBody))
         {
@@ -167,7 +168,7 @@ public static class PushEndpoints
         // useful delivery confirmation and genuinely "for all members"). Unlike
         // a transaction update, where you don't need to be told about your own edit.
         await dispatcher.EnqueueAsync(
-            new PushNotificationRequest(SessionService.DefaultOrgId, ActorUserId: null, title, messageBody, url,
+            new PushNotificationRequest(tenant.TenantId, ActorUserId: null, title, messageBody, url,
                 AllMembers: true, ActorName: actorName, Kind: "announcement"), ct);
 
         return Results.Ok(new { ok = true });
@@ -190,7 +191,7 @@ public static class PushEndpoints
         Guid id, CosmosClient cosmos, IConfiguration configuration, UtsavDbContext db, CancellationToken ct)
     {
         var notification = await db.Notifications.AsNoTracking()
-            .Where(n => n.Id == id && n.OrgId == SessionService.DefaultOrgId)
+            .Where(n => n.Id == id && n.OrgId == db.TenantId)
             .Select(n => new { n.Url, n.Kind, n.ActorUserId, n.CreatedAt })
             .FirstOrDefaultAsync(ct);
 
@@ -211,7 +212,7 @@ public static class PushEndpoints
         var containerName = configuration["Cosmos:Container"]
             ?? throw new InvalidOperationException("Missing configuration: Cosmos:Container");
         var container = cosmos.GetContainer(database, containerName);
-        var orgId = SessionService.DefaultOrgId.ToString();
+        var orgId = db.TenantId.ToString();
 
         // Stored as Kind=Unspecified by EF (see ListNotificationsAsync's own
         // comment on the same quirk) — stamp UTC before using it in the query.

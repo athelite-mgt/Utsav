@@ -73,7 +73,19 @@ internal static class DynamicSql
     public static async Task<int> ExecuteAsync(
         UtsavDbContext db, string sql, IEnumerable<object> parameters, CancellationToken ct)
     {
-        var parameterList = parameters as IReadOnlyCollection<object> ?? parameters.ToList();
+        // The executor owns the tenant, exactly as on the read path: any @org
+        // a caller passed is discarded and replaced, so a stale or forged
+        // value can never win, and an INSERT is always stamped with the
+        // request's committee. This is also the single audit chokepoint for
+        // every mutation, so the tenant bound here is the tenant the audit
+        // event records - the row and its audit trail cannot disagree.
+        IReadOnlyCollection<object> parameterList = parameters
+            .Where(p => p is not SqlParameter sp
+                || !string.Equals(sp.ParameterName.TrimStart('@'), "org", StringComparison.OrdinalIgnoreCase))
+            .Append(new SqlParameter("@org", db.TenantId))
+            .ToList();
+        TenancyGuard.AssertScoped(sql, parameterList.OfType<SqlParameter>().Select(p => p.ParameterName));
+
         var (verb, table) = ParseVerbAndTable(sql);
 
         // Must run before the mutation — it's the only chance to see what the
@@ -95,7 +107,7 @@ internal static class DynamicSql
             await TryAuditAsync(db, table, verb, AuditEntry.Success, null, label, before, parameterList, ct);
             // Failed mutations never reach here (the catch below runs instead)
             // — nobody needs paging about a save that didn't happen.
-            await TryNotifyAsync(table, verb, label, before, parameterList, ct);
+            await TryNotifyAsync(db.TenantId, table, verb, label, before, parameterList, ct);
             return rowsAffected;
         }
         catch (Exception ex)
@@ -118,7 +130,7 @@ internal static class DynamicSql
     /// contract as <see cref="TryAuditAsync"/>: never why a real save fails.
     /// </summary>
     public static async Task AuditCollectionPaymentAsync(
-        string verb, string? entityLabel, Dictionary<string, object?> fields, CancellationToken ct)
+        string verb, string? entityLabel, Dictionary<string, object?> fields, Guid orgId, CancellationToken ct)
     {
         if (_auditSink is null)
         {
@@ -129,7 +141,7 @@ internal static class DynamicSql
         {
             var before = verb == "DELETE FROM" ? new List<Dictionary<string, object?>> { fields } : null;
             var after = verb == "DELETE FROM" ? new Dictionary<string, object?>() : fields;
-            var entry = BuildEntry("collection_payments", verb, AuditEntry.Success, null, entityLabel, before, after, _httpContextAccessor?.HttpContext);
+            var entry = BuildEntry("collection_payments", verb, AuditEntry.Success, null, entityLabel, before, after, _httpContextAccessor?.HttpContext, orgId);
             await _auditSink.WriteAsync(entry, ct);
         }
         catch
@@ -149,7 +161,7 @@ internal static class DynamicSql
     /// Best-effort, same contract as <see cref="TryAuditAsync"/>.
     /// </summary>
     public static async Task AuditFeastTokenPrintAsync(
-        string entityLabel, Dictionary<string, object?> fields, CancellationToken ct)
+        string entityLabel, Dictionary<string, object?> fields, Guid orgId, CancellationToken ct)
     {
         if (_auditSink is null)
         {
@@ -158,7 +170,7 @@ internal static class DynamicSql
 
         try
         {
-            var entry = BuildEntry("feast_tokens", "INSERT INTO", AuditEntry.Success, null, entityLabel, null, fields, _httpContextAccessor?.HttpContext);
+            var entry = BuildEntry("feast_tokens", "INSERT INTO", AuditEntry.Success, null, entityLabel, null, fields, _httpContextAccessor?.HttpContext, orgId);
             await _auditSink.WriteAsync(entry, ct);
         }
         catch
@@ -203,13 +215,13 @@ internal static class DynamicSql
     internal static AuditEntry BuildEntry(
         string table, string verb, string outcome, string? errorMessage, string? entityLabel,
         List<Dictionary<string, object?>>? before, Dictionary<string, object?> after,
-        HttpContext? httpContext)
+        HttpContext? httpContext, Guid orgId)
     {
         var user = httpContext?.User;
 
         return new AuditEntry(
             Id: Guid.NewGuid().ToString(),
-            OrgId: SessionService.DefaultOrgId,
+            OrgId: orgId,
             Timestamp: DateTimeOffset.UtcNow,
             UserId: Guid.TryParse(user?.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId) ? userId : null,
             UserEmail: user?.FindFirst(ClaimTypes.Email)?.Value,
@@ -326,7 +338,7 @@ internal static class DynamicSql
             // derives client-side, just not re-sent and re-stored in full each time.
             var (auditBefore, auditAfter) = verb == "UPDATE" ? DiffChangedFields(before, after) : (before, after);
             await ResolveFriendlyFkValuesAsync(db, auditBefore, auditAfter, ct);
-            var entry = BuildEntry(table, verb, outcome, errorMessage, entityLabel, auditBefore, auditAfter, _httpContextAccessor?.HttpContext);
+            var entry = BuildEntry(table, verb, outcome, errorMessage, entityLabel, auditBefore, auditAfter, _httpContextAccessor?.HttpContext, db.TenantId);
             await _auditSink.WriteAsync(entry, ct);
         }
         catch
@@ -350,7 +362,7 @@ internal static class DynamicSql
     private const string NotifiedKey = "puja:push-notified";
 
     private static async Task TryNotifyAsync(
-        string? table, string? verb, string? entityLabel,
+        Guid orgId, string? table, string? verb, string? entityLabel,
         List<Dictionary<string, object?>>? before, IReadOnlyCollection<object> parameters, CancellationToken ct)
     {
         if (_pushDispatcher is null || table is null || verb is null)
@@ -419,7 +431,7 @@ internal static class DynamicSql
             var body = amount is { } a ? $"{actorName}{detail} — ₹{a:N0}" : $"{actorName}{detail}";
 
             await _pushDispatcher.EnqueueAsync(
-                new PushNotificationRequest(SessionService.DefaultOrgId, actorUserId, title, body, meta.Route,
+                new PushNotificationRequest(orgId, actorUserId, title, body, meta.Route,
                     ActorName: actorName, Kind: "transaction"), ct);
         }
         catch

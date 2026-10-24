@@ -30,11 +30,11 @@ public static class ContractEndpoints
         var write = app.MapGroup("/api").RequirePermission(Permission.WriteFinance);
 
         member.MapGet("/vendors", (UtsavDbContext db, CancellationToken ct) =>
-            QueryAsync(db, "SELECT * FROM vendors WHERE org_id=@org ORDER BY name", [Org()], ct));
+            QueryAsync(db, "SELECT * FROM vendors WHERE org_id=@org ORDER BY name", [Org(db)], ct));
 
         member.MapGet("/contracts", (Guid year_id, UtsavDbContext db, CancellationToken ct) =>
             QueryAsync(db, "SELECT * FROM v_contract_status WHERE year_id=@year AND org_id=@org ORDER BY created_at DESC",
-                [P("@year", year_id), Org()], ct));
+                [P("@year", year_id), Org(db)], ct));
 
         write.MapPost("/contracts", CreateContractAsync);
         write.MapPatch("/contracts/{id:guid}", UpdateContractAsync);
@@ -42,7 +42,7 @@ public static class ContractEndpoints
 
         member.MapGet("/contracts/{id:guid}/payments", (Guid id, UtsavDbContext db, CancellationToken ct) =>
             QueryAsync(db, "SELECT * FROM contract_payments WHERE contract_id=@id AND org_id=@org ORDER BY due_date, created_at",
-                [P("@id", id), Org()], ct));
+                [P("@id", id), Org(db)], ct));
 
         write.MapPost("/contract_payments", CreatePaymentAsync);
         write.MapPatch("/contract_payments/{id:guid}", UpdatePaymentAsync);
@@ -65,7 +65,7 @@ public static class ContractEndpoints
             VALUES (@id, @org, @year, @vendor, @title, @category, @amount, @start, @end, @status, @terms, @notes)
             """,
             [
-                P("@id", id), Org(), P("@year", yearId.GetGuid()), P("@vendor", vendorId.GetGuid()), P("@title", title),
+                P("@id", id), Org(db), P("@year", yearId.GetGuid()), P("@vendor", vendorId.GetGuid()), P("@title", title),
                 P("@category", Opt(body, "category")),
                 P("@amount", body.TryGetProperty("contract_amount", out var amount) ? amount.GetDecimal() : 0m),
                 P("@start", Opt(body, "start_date")), P("@end", Opt(body, "end_date")),
@@ -87,9 +87,9 @@ public static class ContractEndpoints
         // this with ON DELETE SET NULL — SQL Server wouldn't accept that FK
         // (see UtsavDbContext.BreakSecondaryCascadePaths), so it happens here.
         await DynamicSql.ExecuteAsync(db, "UPDATE expenses SET contract_id = NULL WHERE contract_id = @id AND org_id = @org",
-            [P("@id", id), Org()], ct);
+            [P("@id", id), Org(db)], ct);
 
-        await DynamicSql.ExecuteAsync(db, "DELETE FROM contracts WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        await DynamicSql.ExecuteAsync(db, "DELETE FROM contracts WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 
         return Results.Ok(new { ok = true });
     }
@@ -108,7 +108,7 @@ public static class ContractEndpoints
             VALUES (@id, @org, @contract, @milestone, @amount, @due, @note)
             """,
             [
-                P("@id", id), Org(), P("@contract", contractId.GetGuid()), P("@milestone", Opt(body, "milestone")),
+                P("@id", id), Org(db), P("@contract", contractId.GetGuid()), P("@milestone", Opt(body, "milestone")),
                 P("@amount", amount.GetDecimal()), P("@due", Opt(body, "due_date")), P("@note", Opt(body, "note")),
             ], ct);
 
@@ -120,7 +120,7 @@ public static class ContractEndpoints
 
     private static async Task<IResult> DeletePaymentAsync(Guid id, UtsavDbContext db, CancellationToken ct)
     {
-        await DynamicSql.ExecuteAsync(db, "DELETE FROM contract_payments WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        await DynamicSql.ExecuteAsync(db, "DELETE FROM contract_payments WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
         return Results.Ok(new { ok = true });
     }
 
@@ -139,7 +139,7 @@ public static class ContractEndpoints
 
         var assignments = string.Join(", ", supplied.Select((p, i) => $"[{p.Name}] = @p{i}"));
         var parameters = supplied.Select((p, i) => P($"@p{i}", SqlValue.FromJson(p.Value)))
-            .Append(P("@id", id)).Append(Org()).ToArray();
+            .Append(P("@id", id)).Append(Org(db)).ToArray();
 
         await DynamicSql.ExecuteAsync(db, $"UPDATE [{table}] SET {assignments} WHERE id = @id AND org_id = @org;", parameters, ct);
 
@@ -150,8 +150,8 @@ public static class ContractEndpoints
     }
 
     private static Task<List<Dictionary<string, object?>>> ContractStatusAsync(UtsavDbContext db, Guid id, CancellationToken ct) =>
-        QueryAsync(db, "SELECT * FROM v_contract_status WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        QueryAsync(db, "SELECT * FROM v_contract_status WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 
     private static Task<List<Dictionary<string, object?>>> PaymentAsync(UtsavDbContext db, Guid id, CancellationToken ct) =>
-        QueryAsync(db, "SELECT * FROM contract_payments WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        QueryAsync(db, "SELECT * FROM contract_payments WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 }

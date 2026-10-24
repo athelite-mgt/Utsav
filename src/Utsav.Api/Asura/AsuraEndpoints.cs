@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Utsav.Api.Authentication;
 using Utsav.Domain.Authorization;
+using Utsav.Domain.Tenancy;
 using Utsav.Infrastructure.Authentication;
 
 namespace Utsav.Api.Asura;
@@ -127,6 +128,7 @@ internal static class AsuraEndpoints
     private static async Task<IResult> ExportAsync(
         ExportRequest body,
         ReadOnlyQueryExecutor executor,
+        ITenantContext tenant,
         CancellationToken ct)
     {
         if (!ToolCatalogue.TryGet(body.ToolId, out var tool))
@@ -165,7 +167,7 @@ internal static class AsuraEndpoints
 
         try
         {
-            var result = await executor.ExecuteAsync(tool.Sql, SessionService.DefaultOrgId, bound, ct);
+            var result = await executor.ExecuteAsync(tool.Sql, tenant.TenantId, bound, ct);
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmm");
 
             return format == "pdf"
@@ -186,6 +188,7 @@ internal static class AsuraEndpoints
         AskRequest body,
         AsuraOrchestrator orchestrator,
         AsuraRateLimiter limiter,
+        ITenantContext tenant,
         CancellationToken ct)
     {
         var response = http.Response;
@@ -223,7 +226,7 @@ internal static class AsuraEndpoints
 
         await orchestrator.AskAsync(
             body.Question.Trim(),
-            SessionService.DefaultOrgId,
+            tenant.TenantId,
             (e, token) => WriteEventAsync(response, e, token),
             ct);
     }
@@ -232,6 +235,7 @@ internal static class AsuraEndpoints
         HttpContext http,
         DrillRequest body,
         ReadOnlyQueryExecutor executor,
+        ITenantContext tenant,
         CancellationToken ct)
     {
         if (!ToolCatalogue.TryGet(body.ToolId, out var tool))
@@ -267,7 +271,7 @@ internal static class AsuraEndpoints
 
         try
         {
-            var result = await executor.ExecuteAsync(tool.Sql, SessionService.DefaultOrgId, bound, ct);
+            var result = await executor.ExecuteAsync(tool.Sql, tenant.TenantId, bound, ct);
             return Results.Ok(new
             {
                 title = tool.Title,

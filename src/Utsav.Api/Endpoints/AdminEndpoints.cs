@@ -28,12 +28,12 @@ public static class AdminEndpoints
                 SELECT m.id AS member_id, u.id AS user_id, u.email, u.full_name, u.auth_provider, m.created_at
                   FROM org_members m JOIN users u ON u.id = m.user_id
                  WHERE m.org_id=@org AND m.status='pending' ORDER BY m.created_at
-                """, [Org()], ct));
+                """, [Org(db)], ct));
 
         manageUsers.MapPost("/access_requests/{memberId:guid}/approve", ApproveAsync);
         manageUsers.MapPost("/access_requests/{memberId:guid}/deny", async (Guid memberId, UtsavDbContext db, CancellationToken ct) =>
         {
-            await DynamicSql.ExecuteAsync(db, "DELETE FROM org_members WHERE id=@id AND org_id=@org", [P("@id", memberId), Org()], ct);
+            await DynamicSql.ExecuteAsync(db, "DELETE FROM org_members WHERE id=@id AND org_id=@org", [P("@id", memberId), Org(db)], ct);
             return Results.Ok(new { ok = true });
         });
 
@@ -43,7 +43,7 @@ public static class AdminEndpoints
                 SELECT u.id, u.email, u.full_name, m.role, m.created_at
                   FROM org_members m JOIN users u ON u.id = m.user_id
                  WHERE m.org_id=@org AND m.status='active' ORDER BY m.created_at
-                """, [Org()], ct));
+                """, [Org(db)], ct));
 
         manageUsers.MapPatch("/users/{id:guid}", ChangeRoleAsync);
         manageSettings.MapPatch("/organizations/current", RenameCommitteeAsync);
@@ -68,14 +68,14 @@ public static class AdminEndpoints
         }
 
         var member = await QueryAsync(db, "SELECT id FROM org_members WHERE id=@id AND org_id=@org",
-            [P("@id", memberId), Org()], ct);
+            [P("@id", memberId), Org(db)], ct);
         if (member.Count == 0)
         {
             return Results.Json(new { error = "Not found" }, statusCode: 404);
         }
 
         await DynamicSql.ExecuteAsync(db, "UPDATE org_members SET role=@role, status='active' WHERE id=@id AND org_id=@org",
-            [P("@role", role.ToWire()), P("@id", memberId), Org()], ct);
+            [P("@role", role.ToWire()), P("@id", memberId), Org(db)], ct);
 
         return Results.Ok(new { ok = true });
     }
@@ -88,20 +88,20 @@ public static class AdminEndpoints
         }
 
         var member = await QueryAsync(db, "SELECT id FROM org_members WHERE org_id=@org AND user_id=@user",
-            [Org(), P("@user", id)], ct);
+            [Org(db), P("@user", id)], ct);
         if (member.Count == 0)
         {
             return Results.Json(new { error = "Not a member of this organization" }, statusCode: 404);
         }
 
         await DynamicSql.ExecuteAsync(db, "UPDATE org_members SET role=@role WHERE org_id=@org AND user_id=@user",
-            [P("@role", role.ToWire()), Org(), P("@user", id)], ct);
+            [P("@role", role.ToWire()), Org(db), P("@user", id)], ct);
 
         var updated = await QueryAsync(db, """
             SELECT u.id, u.email, u.full_name, m.role
               FROM org_members m JOIN users u ON u.id = m.user_id
              WHERE m.org_id=@org AND m.user_id=@user
-            """, [Org(), P("@user", id)], ct);
+            """, [Org(db), P("@user", id)], ct);
 
         return Results.Ok(updated.FirstOrDefault());
     }
@@ -113,9 +113,9 @@ public static class AdminEndpoints
             return Results.Json(new { error = "Committee name is required" }, statusCode: 400);
         }
 
-        await DynamicSql.ExecuteAsync(db, "UPDATE organizations SET name=@name WHERE id=@org", [P("@name", name.Trim()), Org()], ct);
+        await DynamicSql.ExecuteAsync(db, "UPDATE organizations SET name=@name WHERE id=@org", [P("@name", name.Trim()), Org(db)], ct);
 
-        var org = await QueryAsync(db, "SELECT id, name, slug FROM organizations WHERE id=@org", [Org()], ct);
+        var org = await QueryAsync(db, "SELECT id, name, slug FROM organizations WHERE id=@org", [Org(db)], ct);
         return Results.Ok(org.FirstOrDefault());
     }
 
@@ -133,7 +133,7 @@ public static class AdminEndpoints
     private static async Task<IResult> RolloverAsync(Guid id, JsonElement body, UtsavDbContext db, CancellationToken ct)
     {
         var source = (await QueryAsync(db, "SELECT * FROM puja_years WHERE id=@id AND org_id=@org",
-            [P("@id", id), Org()], ct)).FirstOrDefault();
+            [P("@id", id), Org(db)], ct)).FirstOrDefault();
         if (source is null)
         {
             return Results.Json(new { error = "Source year not found" }, statusCode: 404);
@@ -146,7 +146,7 @@ public static class AdminEndpoints
         }
 
         var clash = await QueryAsync(db, "SELECT id FROM puja_years WHERE org_id=@org AND year=@year",
-            [Org(), P("@year", year)], ct);
+            [Org(db), P("@year", year)], ct);
         if (clash.Count > 0)
         {
             return Results.Json(new { error = $"{year} already exists for this committee" }, statusCode: 400);
@@ -173,13 +173,13 @@ public static class AdminEndpoints
                 INSERT INTO puja_years (id, org_id, year, name, target, projection_pct, is_active)
                 VALUES (@id, @org, @year, @name, @target, @pct, 1)
                 """,
-                [P("@id", newYearId), Org(), P("@year", year), P("@name", name), P("@target", target), P("@pct", projectionPct)], ct);
+                [P("@id", newYearId), Org(db), P("@year", year), P("@name", name), P("@target", target), P("@pct", projectionPct)], ct);
 
             // Single active year, mirroring the toggle Settings does client-side.
-            await DynamicSql.ExecuteAsync(db, "UPDATE puja_years SET is_active = 0 WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+            await DynamicSql.ExecuteAsync(db, "UPDATE puja_years SET is_active = 0 WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
 
             var priorSubs = await QueryAsync(db, "SELECT * FROM subscriptions WHERE year_id=@year AND org_id=@org",
-                [P("@year", id), Org()], ct);
+                [P("@year", id), Org(db)], ct);
 
             foreach (var sub in priorSubs)
             {
@@ -210,7 +210,7 @@ public static class AdminEndpoints
                     VALUES (@id, @org, @donor, @year, @category, @priorBilled, @projected, @collector, @history)
                     """,
                     [
-                        P("@id", Guid.NewGuid()), Org(), P("@donor", sub["donor_id"]!), P("@year", newYearId),
+                        P("@id", Guid.NewGuid()), Org(db), P("@donor", sub["donor_id"]!), P("@year", newYearId),
                         P("@category", category), P("@priorBilled", priorBilled), P("@projected", projected),
                         // Deliberately not carried from the prior year — collector
                         // assignments are made fresh each puja year rather than
@@ -226,7 +226,7 @@ public static class AdminEndpoints
             // budget. contract_amount deliberately resets to 0: a signed
             // contract belongs to the year it was signed for.
             var priorBudget = await QueryAsync(db, "SELECT * FROM v_budget_vs_actual WHERE year_id=@year AND org_id=@org",
-                [P("@year", id), Org()], ct);
+                [P("@year", id), Org(db)], ct);
 
             foreach (var line in priorBudget)
             {
@@ -235,7 +235,7 @@ public static class AdminEndpoints
                     VALUES (@id, @org, @year, @category, @notes, @forecast, 0, @sortOrder)
                     """,
                     [
-                        P("@id", Guid.NewGuid()), Org(), P("@year", newYearId),
+                        P("@id", Guid.NewGuid()), Org(db), P("@year", newYearId),
                         P("@category", line["category"] ?? DBNull.Value), P("@notes", line["notes"] ?? DBNull.Value),
                         P("@forecast", line["actual"] is decimal a ? a : 0m),
                         P("@sortOrder", line["sort_order"] ?? DBNull.Value),

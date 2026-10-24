@@ -17,11 +17,6 @@ namespace Utsav.Infrastructure.Authentication;
 /// </summary>
 public sealed class SessionService(UtsavDbContext db)
 {
-    // TRANSITIONAL: still referenced by endpoints that have not yet been
-    // converted to ITenantContext. Deleted in the task that converts the last
-    // call site; nothing in this class uses it.
-    public static readonly Guid DefaultOrgId = Guid.Parse("00000000-0000-0000-0000-000000000001");
-
     public async Task<string> CreateSessionAsync(Guid userId, CancellationToken ct = default)
     {
         var token = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));

@@ -31,7 +31,7 @@ public sealed class CosmosAuditSink
     }
 
     /// <summary>
-    /// Mirrors <c>CommitteeBootstrapper.EnsureSeededAsync</c> for the audit
+    /// Idempotent startup bootstrap for the audit
     /// side: a fresh deployment for another committee gets its Cosmos
     /// database/container the same way it gets its SQL schema — no manual
     /// portal step — and it's a no-op against one that already exists. The

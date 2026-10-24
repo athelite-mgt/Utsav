@@ -19,7 +19,7 @@ public static class ReferenceEndpoints
 
         group.MapGet("/puja_years", async (UtsavDbContext db, CancellationToken ct) =>
             await db.PujaYears
-                .Where(y => y.OrgId == SessionService.DefaultOrgId)
+                .Where(y => y.OrgId == db.TenantId)
                 .OrderByDescending(y => y.Year)
                 .Select(y => new
                 {
@@ -37,14 +37,14 @@ public static class ReferenceEndpoints
 
         group.MapGet("/zones", async (UtsavDbContext db, CancellationToken ct) =>
             await db.Zones
-                .Where(z => z.OrgId == SessionService.DefaultOrgId)
+                .Where(z => z.OrgId == db.TenantId)
                 .OrderBy(z => z.SortOrder).ThenBy(z => z.Name)
                 .Select(z => new { z.Id, z.OrgId, z.Name, z.SortOrder })
                 .ToListAsync(ct));
 
         group.MapGet("/collectors", async (UtsavDbContext db, CancellationToken ct) =>
             await db.Collectors
-                .Where(c => c.OrgId == SessionService.DefaultOrgId)
+                .Where(c => c.OrgId == db.TenantId)
                 .OrderBy(c => c.SortOrder).ThenBy(c => c.Name)
                 .Select(c => new { c.Id, c.OrgId, c.Name, c.Phone, c.UserId, c.Active, c.SortOrder })
                 .ToListAsync(ct));
@@ -54,7 +54,7 @@ public static class ReferenceEndpoints
         // — the shape each caller in the Node app actually relied on.
         group.MapGet("/lookups", async (string? category, UtsavDbContext db, CancellationToken ct) =>
         {
-            var scoped = db.Lookups.Where(l => l.OrgId == SessionService.DefaultOrgId);
+            var scoped = db.Lookups.Where(l => l.OrgId == db.TenantId);
             var ordered = category is null
                 ? scoped.OrderBy(l => l.Category).ThenBy(l => l.SortOrder)
                 : scoped.Where(l => l.Category == category && l.Active).OrderBy(l => l.SortOrder).ThenBy(l => l.Label);

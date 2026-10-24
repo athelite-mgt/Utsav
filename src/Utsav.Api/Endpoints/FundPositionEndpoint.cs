@@ -86,7 +86,7 @@ public static class FundPositionEndpoint
             """;
 
         var rows = await ModuleEndpoints.QueryAsync(db, sql,
-            [new SqlParameter("@year", year_id), new SqlParameter("@org", SessionService.DefaultOrgId)], ct);
+            [new SqlParameter("@year", year_id), new SqlParameter("@org", db.TenantId)], ct);
 
         var cash = new Dictionary<string, decimal>();
         var bank = new Dictionary<string, decimal>();
@@ -109,14 +109,14 @@ public static class FundPositionEndpoint
     private static async Task<IResult> HandleAsync(Guid year_id, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await ModuleEndpoints.QueryAsync(db, Sql,
-            [new SqlParameter("@year", year_id), new SqlParameter("@org", SessionService.DefaultOrgId)], ct);
+            [new SqlParameter("@year", year_id), new SqlParameter("@org", db.TenantId)], ct);
 
         // Balances carried forward from last year's close — real money on hand
         // before a rupee of this year's collection, so they belong in the
         // position but not in "received". Kept as their own term (see Side.Opening)
         // so the card can show them for what they are.
         var year = await db.PujaYears.AsNoTracking()
-            .Where(y => y.Id == year_id && y.OrgId == SessionService.DefaultOrgId)
+            .Where(y => y.Id == year_id && y.OrgId == db.TenantId)
             .Select(y => new { y.OpeningCashBalance, y.OpeningBankBalance })
             .SingleOrDefaultAsync(ct);
 

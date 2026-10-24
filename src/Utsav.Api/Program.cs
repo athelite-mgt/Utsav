@@ -42,7 +42,6 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<ExternalIdentityService>();
-builder.Services.AddScoped<CommitteeBootstrapper>();
 builder.Services.AddScoped<ApiKeyService>();
 builder.Services
     .AddAuthentication(LegacySessionAuthenticationDefaults.SchemeName)
@@ -139,30 +138,11 @@ var staticFileOptions = new StaticFileOptions
 app.UseDefaultFiles();
 app.UseStaticFiles(staticFileOptions);
 
-// A brand-new database gets its organization and reference data here, so
-// deploying for another committee is: create database, run migrations, start.
-// No-op once an organization exists, so established deployments are untouched.
-//
-// Deliberately not allowed to bring the app down. This runs before app.Run(),
-// which means before Kestrel binds its port at all — a slow or unreachable
-// database at this point (a firewall rule not yet applied, a transient
-// network blip) previously meant the whole container never started serving
-// anything, not even static files or a health check, and the platform's own
-// warm-up probe would eventually kill it outright. A cold start that can't
-// reach the database is exactly when the app most needs to still come up and
-// report that clearly, rather than disappear.
-try
-{
-    using var scope = app.Services.CreateScope();
-    await scope.ServiceProvider.GetRequiredService<CommitteeBootstrapper>().EnsureSeededAsync();
-}
-catch (Exception ex)
-{
-    app.Logger.LogError(ex, "Committee bootstrap failed — continuing startup anyway. " +
-        "If this is a brand-new database, it still needs seeding once connectivity is restored.");
-}
+// Deliberately no committee bootstrap. A pooled multi-tenant platform must not
+// conjure a tenant at startup: committees are provisioned explicitly by a
+// platform administrator (see the platform endpoints).
 
-// Same reasoning as the committee bootstrap above, for the Cosmos side: must
+// Must not be why the app fails to start, for the Cosmos side: must
 // not be why the app fails to start, since the audit trail is deliberately
 // not on the critical path for a committee member's actual save (TASKLIST §5.6).
 try

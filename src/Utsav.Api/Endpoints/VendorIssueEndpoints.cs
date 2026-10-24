@@ -41,12 +41,12 @@ public static class VendorIssueEndpoints
                  ORDER BY COALESCE(vi.occurred_on, '') DESC, vi.created_at DESC
                 """,
                 vendor_id is null && contract_id is null
-                    ? [Org()]
+                    ? [Org(db)]
                     : vendor_id is null
-                        ? [Org(), P("@contract", contract_id!.Value)]
+                        ? [Org(db), P("@contract", contract_id!.Value)]
                         : contract_id is null
-                            ? [Org(), P("@vendor", vendor_id.Value)]
-                            : [Org(), P("@vendor", vendor_id.Value), P("@contract", contract_id.Value)],
+                            ? [Org(db), P("@vendor", vendor_id.Value)]
+                            : [Org(db), P("@vendor", vendor_id.Value), P("@contract", contract_id.Value)],
                 ct));
 
         write.MapPost("/vendor_issues", CreateAsync);
@@ -71,7 +71,7 @@ public static class VendorIssueEndpoints
             VALUES (@id, @org, @vendor, @contract, @type, @description, @occurred, @status)
             """,
             [
-                P("@id", id), Org(), P("@vendor", vendorId.GetGuid()),
+                P("@id", id), Org(db), P("@vendor", vendorId.GetGuid()),
                 P("@contract", Opt(body, "contract_id")),
                 P("@type", issueType), P("@description", description),
                 P("@occurred", Opt(body, "occurred_on")),
@@ -94,7 +94,7 @@ public static class VendorIssueEndpoints
 
         var assignments = string.Join(", ", supplied.Select((p, i) => $"[{p.Name}] = @p{i}"));
         var parameters = supplied.Select((p, i) => P($"@p{i}", SqlValue.FromJson(p.Value)))
-            .Append(P("@id", id)).Append(Org()).ToArray();
+            .Append(P("@id", id)).Append(Org(db)).ToArray();
 
         await DynamicSql.ExecuteAsync(db, $"UPDATE [vendor_issues] SET {assignments} WHERE id = @id AND org_id = @org;", parameters, ct);
 
@@ -106,7 +106,7 @@ public static class VendorIssueEndpoints
 
     private static async Task<IResult> DeleteAsync(Guid id, UtsavDbContext db, CancellationToken ct)
     {
-        await DynamicSql.ExecuteAsync(db, "DELETE FROM vendor_issues WHERE id=@id AND org_id=@org", [P("@id", id), Org()], ct);
+        await DynamicSql.ExecuteAsync(db, "DELETE FROM vendor_issues WHERE id=@id AND org_id=@org", [P("@id", id), Org(db)], ct);
         return Results.Ok(new { ok = true });
     }
 
@@ -117,5 +117,5 @@ public static class VendorIssueEndpoints
               JOIN vendors v ON v.id = vi.vendor_id
               LEFT JOIN contracts c ON c.id = vi.contract_id
              WHERE vi.id = @id AND vi.org_id = @org
-            """, [P("@id", id), Org()], ct);
+            """, [P("@id", id), Org(db)], ct);
 }

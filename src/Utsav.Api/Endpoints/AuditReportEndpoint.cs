@@ -60,7 +60,7 @@ public static class AuditReportEndpoint
     {
         var yearId = year_id ?? (await ModuleEndpoints.QueryAsync(db,
                 "SELECT TOP 1 id FROM puja_years WHERE org_id=@org AND is_active=1 ORDER BY year DESC",
-                [new SqlParameter("@org", SessionService.DefaultOrgId)], ct))
+                [new SqlParameter("@org", db.TenantId)], ct))
             .FirstOrDefault()?["id"] as Guid?;
 
         if (yearId is null) return Results.NotFound(new { error = "No active puja year" });
@@ -86,7 +86,7 @@ public static class AuditReportEndpoint
     /// </summary>
     internal static async Task<AuditReportDto?> BuildAsync(Guid year_id, UtsavDbContext db, CancellationToken ct)
     {
-        var org = SessionService.DefaultOrgId;
+        var org = db.TenantId;
         SqlParameter[] P() => [new SqlParameter("@year", year_id), new SqlParameter("@org", org)];
 
         // Year header + opening balances brought forward.

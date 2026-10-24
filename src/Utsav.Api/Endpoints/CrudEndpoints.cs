@@ -72,7 +72,7 @@ public static class CrudEndpoints
         var parameters = new List<SqlParameter>
         {
             new("@id", id),
-            new("@org", SessionService.DefaultOrgId),
+            new("@org", db.TenantId),
         };
         parameters.AddRange(supplied.Select(c => new SqlParameter($"@{c.Column}", c.Value)));
 
@@ -109,7 +109,7 @@ public static class CrudEndpoints
         var parameters = supplied
             .Select(c => new SqlParameter($"@{c.Column}", c.Value))
             .Append(new SqlParameter("@id", id))
-            .Append(new SqlParameter("@org", SessionService.DefaultOrgId))
+            .Append(new SqlParameter("@org", db.TenantId))
             .ToList();
 
         await DynamicSql.ExecuteAsync(db, sql, parameters, ct);
@@ -137,13 +137,13 @@ public static class CrudEndpoints
             foreach (var (childTable, childColumn) in detachments)
             {
                 await DynamicSql.ExecuteAsync(db, $"UPDATE [{childTable}] SET [{childColumn}] = NULL WHERE [{childColumn}] = @id AND org_id = @org;",
-                    [new SqlParameter("@id", id), new SqlParameter("@org", SessionService.DefaultOrgId)],
+                    [new SqlParameter("@id", id), new SqlParameter("@org", db.TenantId)],
                     ct);
             }
         }
 
         await DynamicSql.ExecuteAsync(db, $"DELETE FROM [{safeTable}] WHERE id = @id AND org_id = @org;",
-            [new SqlParameter("@id", id), new SqlParameter("@org", SessionService.DefaultOrgId)],
+            [new SqlParameter("@id", id), new SqlParameter("@org", db.TenantId)],
             ct);
 
         return Results.Ok(new { ok = true });
@@ -223,7 +223,7 @@ public static class CrudEndpoints
             db.CollectionPayments.Add(new CollectionPayment
             {
                 Id = Guid.NewGuid(),
-                OrgId = SessionService.DefaultOrgId,
+                OrgId = db.TenantId,
                 YearId = yearId,
                 ParentType = parentType,
                 ParentId = parentId,
@@ -246,11 +246,11 @@ public static class CrudEndpoints
             var label = await ResolveSettlementLabelAsync(db, table, parentId, ct);
             foreach (var s in added)
             {
-                await DynamicSql.AuditCollectionPaymentAsync("INSERT INTO", label, s.ToAuditFields(), ct);
+                await DynamicSql.AuditCollectionPaymentAsync("INSERT INTO", label, s.ToAuditFields(), db.TenantId, ct);
             }
             foreach (var s in removed)
             {
-                await DynamicSql.AuditCollectionPaymentAsync("DELETE FROM", label, s.ToAuditFields(), ct);
+                await DynamicSql.AuditCollectionPaymentAsync("DELETE FROM", label, s.ToAuditFields(), db.TenantId, ct);
             }
         }
     }

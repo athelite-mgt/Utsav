@@ -56,7 +56,7 @@ public static class AuditEndpoints
     };
 
     private static async Task<IResult> ListAsync(
-        CosmosClient cosmos, IConfiguration configuration,
+        CosmosClient cosmos, IConfiguration configuration, Utsav.Domain.Tenancy.ITenantContext tenant,
         string? entityType, Guid? userId, DateTimeOffset? from, DateTimeOffset? to,
         int? limit, string? continuationToken, CancellationToken ct)
     {
@@ -66,7 +66,7 @@ public static class AuditEndpoints
             ?? throw new InvalidOperationException("Missing configuration: Cosmos:Container");
         var container = cosmos.GetContainer(database, containerName);
 
-        var orgId = SessionService.DefaultOrgId.ToString();
+        var orgId = tenant.TenantId.ToString();
         var sql = new StringBuilder("SELECT * FROM c WHERE c.orgId = @org");
         var parameters = new List<(string Name, object Value)> { ("@org", orgId) };
 

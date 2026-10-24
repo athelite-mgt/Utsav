@@ -137,6 +137,11 @@ public class DynamicSqlAuditTests
 
     public class BuildEntry
     {
+        // The tenant is supplied by the executor, never a default: an audit
+        // event filed under the wrong partition would put one committee's
+        // trail in another's.
+        private static readonly Guid Tenant = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
         [Fact]
         public void Populates_who_and_where_from_the_ambient_request()
         {
@@ -155,7 +160,7 @@ public class DynamicSqlAuditTests
 
             var entry = DynamicSql.BuildEntry(
                 "expenses", "UPDATE", AuditEntry.Success, errorMessage: null, entityLabel: null,
-                before: null, after: new Dictionary<string, object?> { ["amount"] = 500m }, httpContext);
+                before: null, after: new Dictionary<string, object?> { ["amount"] = 500m }, httpContext, Tenant);
 
             Assert.Equal(userId, entry.UserId);
             Assert.Equal("secretariat@example.org", entry.UserEmail);
@@ -164,7 +169,7 @@ public class DynamicSqlAuditTests
             Assert.Equal("/api/expenses/123", entry.RequestPath);
             Assert.Equal("TestAgent/1.0", entry.UserAgent);
             Assert.Equal("10.0.0.5", entry.IpAddress);
-            Assert.Equal(SessionService.DefaultOrgId, entry.OrgId);
+            Assert.Equal(Tenant, entry.OrgId);
         }
 
         [Fact]
@@ -172,7 +177,7 @@ public class DynamicSqlAuditTests
         {
             var entry = DynamicSql.BuildEntry(
                 "expenses", "DELETE FROM", AuditEntry.Success, errorMessage: null, entityLabel: null,
-                before: null, after: new Dictionary<string, object?>(), httpContext: null);
+                before: null, after: new Dictionary<string, object?>(), httpContext: null, orgId: Tenant);
 
             Assert.Null(entry.UserId);
             Assert.Null(entry.UserEmail);
@@ -193,7 +198,7 @@ public class DynamicSqlAuditTests
         {
             var entry = DynamicSql.BuildEntry(
                 "expenses", verb, AuditEntry.Success, errorMessage: null, entityLabel: null,
-                before: null, after: [], httpContext: null);
+                before: null, after: [], httpContext: null, orgId: Tenant);
 
             Assert.Equal(expectedAction, entry.Action);
         }
@@ -206,7 +211,7 @@ public class DynamicSqlAuditTests
 
             var entry = DynamicSql.BuildEntry(
                 "expenses", "UPDATE", AuditEntry.Failure, "Timeout expired", entityLabel: null,
-                before, after, httpContext: null);
+                before, after, httpContext: null, orgId: Tenant);
 
             Assert.Equal(AuditEntry.Failure, entry.Outcome);
             Assert.Equal("Timeout expired", entry.ErrorMessage);

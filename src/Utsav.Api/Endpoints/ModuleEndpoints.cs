@@ -84,7 +84,7 @@ public static class ModuleEndpoints
         member.MapGet("/workflow_items/{id:guid}/notes", async (Guid id, UtsavDbContext db, CancellationToken ct) =>
             Results.Ok(await QueryAsync(db,
                 "SELECT * FROM workflow_notes WHERE workflow_item_id=@id AND org_id=@org ORDER BY created_at",
-                [new SqlParameter("@id", id), new SqlParameter("@org", SessionService.DefaultOrgId)], ct)));
+                [new SqlParameter("@id", id), new SqlParameter("@org", db.TenantId)], ct)));
 
         writeWorkflow.MapPost("/workflow_items/{id:guid}/notes", AddWorkflowNoteAsync);
 
@@ -109,7 +109,7 @@ public static class ModuleEndpoints
              WHERE org_id=@org AND year < (SELECT year FROM puja_years WHERE id=@year)
              ORDER BY year DESC
             """,
-            [new SqlParameter("@org", SessionService.DefaultOrgId), new SqlParameter("@year", year_id)], ct))
+            [new SqlParameter("@org", db.TenantId), new SqlParameter("@year", year_id)], ct))
             .FirstOrDefault();
 
         var priorYearId = prior?["id"];
@@ -137,7 +137,7 @@ public static class ModuleEndpoints
             [
                 new SqlParameter("@prior", priorYearId ?? (object)DBNull.Value),
                 new SqlParameter("@year", year_id),
-                new SqlParameter("@org", SessionService.DefaultOrgId),
+                new SqlParameter("@org", db.TenantId),
                 new SqlParameter("@category", (object?)category ?? DBNull.Value),
             ], ct);
 
@@ -193,7 +193,7 @@ public static class ModuleEndpoints
                       TRY_CAST(NULLIF(f.bill_no,'') AS INT) ASC,
                       d.name ASC
             """,
-            [new SqlParameter("@year", year_id), new SqlParameter("@org", SessionService.DefaultOrgId)], ct);
+            [new SqlParameter("@year", year_id), new SqlParameter("@org", db.TenantId)], ct);
 
         foreach (var row in rows)
         {
@@ -223,7 +223,7 @@ public static class ModuleEndpoints
               FROM ad_bookings b JOIN advertisers a ON a.id = b.advertiser_id
              WHERE b.year_id=@year AND b.org_id=@org ORDER BY a.name
             """,
-            [new SqlParameter("@year", year_id), new SqlParameter("@org", SessionService.DefaultOrgId)], ct);
+            [new SqlParameter("@year", year_id), new SqlParameter("@org", db.TenantId)], ct);
 
         foreach (var row in rows)
         {
@@ -256,7 +256,7 @@ public static class ModuleEndpoints
 
         var exists = await QueryAsync(db,
             "SELECT id FROM workflow_items WHERE id=@id AND org_id=@org",
-            [new SqlParameter("@id", id), new SqlParameter("@org", SessionService.DefaultOrgId)], ct);
+            [new SqlParameter("@id", id), new SqlParameter("@org", db.TenantId)], ct);
         if (exists.Count == 0)
         {
             return Results.Json(new { error = "Workflow item not found" }, statusCode: 404);
@@ -271,7 +271,7 @@ public static class ModuleEndpoints
             """,
             [
                 new SqlParameter("@id", noteId),
-                new SqlParameter("@org", SessionService.DefaultOrgId),
+                new SqlParameter("@org", db.TenantId),
                 new SqlParameter("@item", id),
                 new SqlParameter("@author", session.User.Id),
                 new SqlParameter("@authorName", (object?)(session.User.FullName ?? session.User.Email) ?? DBNull.Value),
@@ -280,14 +280,14 @@ public static class ModuleEndpoints
 
         var created = await QueryAsync(db,
             "SELECT * FROM workflow_notes WHERE id=@id AND org_id=@org",
-            [new SqlParameter("@id", noteId), new SqlParameter("@org", SessionService.DefaultOrgId)], ct);
+            [new SqlParameter("@id", noteId), new SqlParameter("@org", db.TenantId)], ct);
 
         return Results.Ok(created.FirstOrDefault());
     }
 
     private static async Task<IResult> RowsAsync(UtsavDbContext db, string sql, Guid yearId, CancellationToken ct) =>
         Results.Ok(await QueryAsync(db, sql,
-            [new SqlParameter("@year", yearId), new SqlParameter("@org", SessionService.DefaultOrgId)], ct));
+            [new SqlParameter("@year", yearId), new SqlParameter("@org", db.TenantId)], ct));
 
     /// <summary>
     /// Returns rows as plain dictionaries so every column the table has reaches

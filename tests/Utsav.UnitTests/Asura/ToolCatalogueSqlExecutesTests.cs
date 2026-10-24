@@ -29,8 +29,8 @@ public class ToolCatalogueSqlExecutesTests
     private static string? ConnectionString =>
         Environment.GetEnvironmentVariable("ASURA_LOCAL_SQL");
 
-    /// <summary>The single-org id this app uses (SessionService.DefaultOrgId).</summary>
-    private static readonly Guid DevOrgId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    /// <summary>A fixed org id for the local-only Asura SQL checks; not special to the app.</summary>
+    private static readonly Guid DevOrgId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     public static TheoryData<string> AllToolIds()
     {

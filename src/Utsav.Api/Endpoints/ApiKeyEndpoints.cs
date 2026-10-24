@@ -35,7 +35,7 @@ public static class ApiKeyEndpoints
     private static async Task<IResult> ListAsync(UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.ApiKeys.AsNoTracking()
-            .Where(k => k.OrgId == SessionService.DefaultOrgId)
+            .Where(k => k.OrgId == db.TenantId)
             .OrderByDescending(k => k.CreatedAt)
             .Select(k => new
             {
@@ -62,7 +62,7 @@ public static class ApiKeyEndpoints
         var record = new ApiKey
         {
             Id = Guid.NewGuid(),
-            OrgId = SessionService.DefaultOrgId,
+            OrgId = db.TenantId,
             Name = name,
             KeyHash = ApiKeyService.HashKey(key),
             Prefix = ApiKeyService.DisplayPrefixOf(key),
@@ -90,7 +90,7 @@ public static class ApiKeyEndpoints
         // audit trail entry or a support question about "what was calling us"
         // still resolves to something readable.
         var affected = await db.ApiKeys
-            .Where(k => k.Id == id && k.OrgId == SessionService.DefaultOrgId && k.RevokedAt == null)
+            .Where(k => k.Id == id && k.OrgId == db.TenantId && k.RevokedAt == null)
             .ExecuteUpdateAsync(s => s.SetProperty(k => k.RevokedAt, DateTime.UtcNow), ct);
 
         return affected == 0 ? Results.NotFound() : Results.NoContent();
