@@ -1,0 +1,17 @@
+{
+  "name": "Puja Finance — Durga Puja Manager",
+  "short_name": "Puja Finance",
+  "description": "Collections, expenses & budget for your Durga Puja committee — powered by Athelite",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#231F20",
+  "theme_color": "#231F20",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

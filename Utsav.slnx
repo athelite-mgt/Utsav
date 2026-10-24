@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Utsav.Api/Utsav.Api.csproj" />
+    <Project Path="src/Utsav.Domain/Utsav.Domain.csproj" />
+    <Project Path="src/Utsav.Infrastructure/Utsav.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Utsav.IntegrationTests/Utsav.IntegrationTests.csproj" />
+    <Project Path="tests/Utsav.UnitTests/Utsav.UnitTests.csproj" />
+  </Folder>
+</Solution>

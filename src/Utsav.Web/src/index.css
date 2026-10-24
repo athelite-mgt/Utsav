@@ -1,0 +1,382 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =====================================================================
+   Colour schemes
+   Four selectable chrome palettes, each with its own light + dark
+   variant, chosen via [data-scheme] on <html> (see ThemeProvider). The
+   default (no attribute, or "blue") is Ocean Blue, in light mode.
+
+   Semantic colours are declared ONCE, outside the per-scheme blocks, and
+   never vary: --destructive is "money owed / over budget" and --success
+   is "cleared" everywhere in this app, on every scheme. A user switching
+   decoration must never accidentally change what red or green MEANS.
+   ===================================================================== */
+
+@layer base {
+  :root {
+    /* clay red — reserved for money owed. Shared across every scheme. */
+    --destructive: 4 54% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 154 47% 33%;
+    --success-foreground: 154 40% 97%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --destructive: 6 65% 60%;
+    --destructive-foreground: 200 20% 8%;
+
+    --success: 154 45% 50%;
+    --success-foreground: 154 30% 10%;
+  }
+
+  /* ---------------------------------------------------------------------
+     Ocean Blue (default)
+     Clean, professional blue chrome on a cool-neutral ground — the
+     default first impression (ThemeProvider defaults new visitors to
+     light + blue). Amber is the accent: tags, highlights, "needs
+     attention", echoing the marigold scheme without competing with it.
+     --------------------------------------------------------------------- */
+  :root,
+  :root[data-scheme="blue"] {
+    --background: 210 25% 97%;
+    --foreground: 222 30% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 30% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 30% 12%;
+
+    /* strong, safe-under-white-text blue (≈6.5:1) */
+    --primary: 220 75% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 20% 93%;
+    --secondary-foreground: 222 20% 22%;
+
+    --gold: 40 90% 35%;
+    --gold-foreground: 40 90% 12%;
+
+    --muted: 210 18% 94%;
+    --muted-foreground: 220 10% 42%;
+
+    --accent: 210 22% 92%;
+    --accent-foreground: 222 25% 16%;
+
+    --border: 210 18% 87%;
+    --input: 210 18% 84%;
+    --ring: 220 75% 45%;
+  }
+
+  .dark,
+  .dark[data-scheme="blue"] {
+    --background: 222 22% 8%;
+    --foreground: 210 15% 92%;
+
+    --card: 222 18% 11%;
+    --card-foreground: 210 15% 92%;
+
+    --popover: 222 18% 12%;
+    --popover-foreground: 210 15% 92%;
+
+    /* blue lifts on dark so it stays a visible accent, not a hole */
+    --primary: 217 85% 62%;
+    --primary-foreground: 222 30% 8%;
+
+    --secondary: 222 14% 17%;
+    --secondary-foreground: 210 12% 90%;
+
+    --gold: 42 90% 58%;
+    --gold-foreground: 40 90% 10%;
+
+    --muted: 222 14% 15%;
+    --muted-foreground: 210 8% 62%;
+
+    --accent: 222 14% 19%;
+    --accent-foreground: 210 12% 90%;
+
+    --border: 222 14% 18%;
+    --input: 222 14% 21%;
+    --ring: 217 80% 62%;
+  }
+
+  /* ---------------------------------------------------------------------
+     Marigold & Deep Teal
+     Ground is a warm bone so the page reads festive without shouting.
+     Deep teal is the anchor — nav, headers, primary actions, focus rings.
+     Marigold is the accent: tags, highlights, "needs attention".
+     --------------------------------------------------------------------- */
+  :root[data-scheme="marigold"] {
+    --background: 40 33% 96%;
+    --foreground: 185 25% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 185 25% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 185 25% 11%;
+
+    /* deep teal — safe under white text (≈11:1) */
+    --primary: 175 70% 18%;
+    --primary-foreground: 40 30% 97%;
+
+    --secondary: 40 22% 92%;
+    --secondary-foreground: 185 20% 22%;
+
+    /* marigold, darkened to stay legible as text on the bone ground */
+    --gold: 38 85% 32%;
+    --gold-foreground: 40 90% 12%;
+
+    --muted: 40 20% 93%;
+    --muted-foreground: 185 10% 40%;
+
+    --accent: 40 24% 91%;
+    --accent-foreground: 185 25% 16%;
+
+    --border: 40 18% 87%;
+    --input: 40 18% 84%;
+    --ring: 175 60% 28%;
+  }
+
+  .dark[data-scheme="marigold"] {
+    --background: 200 13% 9%;
+    --foreground: 40 15% 92%;
+
+    --card: 197 12% 12%;
+    --card-foreground: 40 15% 92%;
+
+    --popover: 197 12% 13%;
+    --popover-foreground: 40 15% 92%;
+
+    /* teal lifts on dark so it stays a visible accent, not a hole */
+    --primary: 174 52% 44%;
+    --primary-foreground: 190 40% 8%;
+
+    --secondary: 197 10% 18%;
+    --secondary-foreground: 40 12% 90%;
+
+    --gold: 42 90% 60%;
+    --gold-foreground: 40 90% 10%;
+
+    --muted: 197 10% 16%;
+    --muted-foreground: 197 8% 62%;
+
+    --accent: 197 10% 20%;
+    --accent-foreground: 40 12% 90%;
+
+    --border: 197 10% 19%;
+    --input: 197 10% 22%;
+    --ring: 174 52% 46%;
+  }
+
+  /* ---------------------------------------------------------------------
+     Indigo & Copper
+     Cooler, more corporate-ledger feel — indigo chrome with a copper
+     accent. Best for a wider committee/audit audience.
+     --------------------------------------------------------------------- */
+  :root[data-scheme="indigo"] {
+    --background: 220 20% 97%;
+    --foreground: 225 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 225 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 25% 12%;
+
+    --primary: 228 45% 29%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 18% 93%;
+    --secondary-foreground: 225 20% 22%;
+
+    /* copper, darkened for text legibility */
+    --gold: 28 60% 38%;
+    --gold-foreground: 28 70% 14%;
+
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 10% 44%;
+
+    --accent: 220 18% 92%;
+    --accent-foreground: 225 25% 16%;
+
+    --border: 220 16% 88%;
+    --input: 220 16% 85%;
+    --ring: 228 40% 35%;
+  }
+
+  .dark[data-scheme="indigo"] {
+    --background: 222 18% 8%;
+    --foreground: 220 15% 93%;
+
+    --card: 222 16% 11%;
+    --card-foreground: 220 15% 93%;
+
+    --popover: 222 16% 12%;
+    --popover-foreground: 220 15% 93%;
+
+    --primary: 228 48% 58%;
+    --primary-foreground: 225 30% 8%;
+
+    --secondary: 222 14% 17%;
+    --secondary-foreground: 220 15% 90%;
+
+    --gold: 30 65% 55%;
+    --gold-foreground: 30 80% 10%;
+
+    --muted: 222 14% 15%;
+    --muted-foreground: 220 10% 62%;
+
+    --accent: 222 14% 19%;
+    --accent-foreground: 220 15% 90%;
+
+    --border: 222 14% 18%;
+    --input: 222 14% 21%;
+    --ring: 228 48% 60%;
+  }
+
+  /* ---------------------------------------------------------------------
+     Terracotta & Sage
+     Earthy and traditional — terracotta, sage green, warm sand. Softer
+     and more handmade-feeling than the other two.
+     --------------------------------------------------------------------- */
+  :root[data-scheme="terracotta"] {
+    --background: 40 38% 96%;
+    --foreground: 20 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 25% 12%;
+
+    --primary: 15 55% 34%;
+    --primary-foreground: 40 30% 97%;
+
+    --secondary: 40 25% 92%;
+    --secondary-foreground: 20 20% 24%;
+
+    /* sage — shifted well clear of --success (154°) so the two never read
+       as the same colour */
+    --gold: 90 30% 32%;
+    --gold-foreground: 90 35% 12%;
+
+    --muted: 40 22% 93%;
+    --muted-foreground: 20 12% 42%;
+
+    --accent: 40 26% 91%;
+    --accent-foreground: 20 25% 16%;
+
+    --border: 40 20% 86%;
+    --input: 40 20% 83%;
+    --ring: 15 50% 40%;
+  }
+
+  .dark[data-scheme="terracotta"] {
+    --background: 20 15% 9%;
+    --foreground: 40 15% 92%;
+
+    --card: 18 14% 12%;
+    --card-foreground: 40 15% 92%;
+
+    --popover: 18 14% 13%;
+    --popover-foreground: 40 15% 92%;
+
+    --primary: 16 55% 52%;
+    --primary-foreground: 20 30% 8%;
+
+    --secondary: 18 12% 18%;
+    --secondary-foreground: 40 12% 90%;
+
+    --gold: 90 35% 48%;
+    --gold-foreground: 90 40% 10%;
+
+    --muted: 18 12% 16%;
+    --muted-foreground: 20 10% 63%;
+
+    --accent: 18 12% 20%;
+    --accent-foreground: 40 12% 90%;
+
+    --border: 18 12% 19%;
+    --input: 18 12% 22%;
+    --ring: 16 50% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight;
+  }
+  /* Money and counts line up in columns everywhere */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /*
+   * The box a dialog is centred inside: exactly the area the user can see,
+   * rather than the whole page — see lib/viewport.ts for where
+   * --vv-height/--vv-top come from. With the keyboard open this shrinks to
+   * the space that's left, so the panel inside (capped at max-h-full)
+   * shrinks with it: its body stays scrollable and its sticky footer
+   * (Save / Add) sits right above the keyboard instead of behind it.
+   *
+   * The fallback is what desktop browsers and anything without
+   * visualViewport get — the full window, which is all they need.
+   */
+  .dialog-viewport-frame {
+    top: var(--vv-top, 0px);
+    height: var(--vv-height, 100dvh);
+  }
+
+  /*
+   * Focusing a field scrolls it into view; without this the browser is free
+   * to stop with the field flush against the scroll area's edge. The footer
+   * is ordinary flow content now (not a floating overlay), so this just
+   * needs a modest cushion, not a whole footer's worth of reserved space.
+   */
+  .dialog-panel :is(input, textarea, select, [role="combobox"]) {
+    scroll-margin-block: 1rem 2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

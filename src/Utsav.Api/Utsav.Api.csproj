@@ -1,0 +1,95 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>6d3dc2cf-1a03-4629-8fdc-3511cbb85cce</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!--
+      Microsoft.AspNetCore.OpenApi 10.0.10 pulls Microsoft.OpenApi 2.0.0
+      transitively, which carries a high-severity advisory
+      (GHSA-v5pm-xwqc-g5wc). Pinned forward to the latest patched 2.x — same
+      major version, so no API break. Remove once the AspNetCore package
+      itself references a fixed version.
+    -->
+    <PackageReference Include="Microsoft.OpenApi" />
+    <!-- dotnet-ef needs Design in the startup project, not just the project
+         that owns the DbContext. Build-time only, same as in Infrastructure. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="QuestPDF" />
+    <PackageReference Include="ClosedXML" />
+    <PackageReference Include="QRCoder" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Utsav.Domain\Utsav.Domain.csproj" />
+    <ProjectReference Include="..\Utsav.Infrastructure\Utsav.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <!-- Bengali-capable font for server-rendered PDFs (the API-key report
+       export). Embedded rather than relying on system fonts: the Azure
+       App Service image has no Indic fonts, so Bengali donor names would
+       render as blank boxes exactly as they did client-side. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Fonts\NotoSansBengali-Regular.ttf" />
+    <EmbeddedResource Include="Fonts\NotoSansBengali-Bold.ttf" />
+  </ItemGroup>
+
+  <!-- Lets Utsav.UnitTests assert against TableRegistry directly instead of
+       duplicating its table list, which would drift silently. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Utsav.UnitTests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PujaWebDir>$(MSBuildThisFileDirectory)..\Utsav.Web\</PujaWebDir>
+    <PujaWebDistDir>$(PujaWebDir)dist\</PujaWebDistDir>
+  </PropertyGroup>
+
+  <!--
+    Builds the React app and drops it into wwwroot as part of `dotnet publish`,
+    so the publish output is one self-contained, deployable artifact — no
+    separate frontend build step for CI or a manual deploy to remember.
+
+    Skipped on plain `dotnet build`: rebuilding the whole frontend on every
+    inner-loop build would make local iteration painfully slow for no benefit,
+    since nothing serves wwwroot in dev anyway (Vite does, on its own port).
+  -->
+  <Target Name="BuildAndCopyFrontend" BeforeTargets="ComputeFilesToPublish">
+    <Exec Command="npm ci" WorkingDirectory="$(PujaWebDir)" Condition="!Exists('$(PujaWebDir)node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(PujaWebDir)" />
+
+    <ItemGroup>
+      <FrontendDist Include="$(PujaWebDistDir)**\*" />
+    </ItemGroup>
+    <RemoveDir Directories="$(MSBuildProjectDirectory)\wwwroot" Condition="Exists('$(MSBuildProjectDirectory)\wwwroot')" />
+    <Copy SourceFiles="@(FrontendDist)" DestinationFolder="$(MSBuildProjectDirectory)\wwwroot\%(RecursiveDir)" />
+
+    <!--
+      The SDK's implicit `wwwroot\**` Content glob was already evaluated at
+      project-load time, before these files existed, so it never sees them.
+      ResolvedFileToPublish is the item group the Web SDK's publish pipeline
+      actually copies from — appending to it directly, with RelativePath set
+      so the files land under wwwroot in the output, is the reliable way to
+      feed it content generated at build time rather than present on disk from
+      the start.
+    -->
+    <ItemGroup>
+      <_FrontendPublishFiles Include="$(MSBuildProjectDirectory)\wwwroot\**\*" />
+      <ResolvedFileToPublish Include="@(_FrontendPublishFiles)">
+        <RelativePath>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

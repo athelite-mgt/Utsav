@@ -1,0 +1,45 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+
+## Secrets — never commit
+.env
+.env.*
+!.env.example
+# Build-time client IDs, not secrets — see the file's own header comment.
+!src/Utsav.Web/.env.production
+appsettings.*.local.json
+secrets.json
+
+## Node / frontend
+node_modules/
+dist/
+.vite/
+*.local
+
+## Editors / OS
+.idea/
+.DS_Store
+Thumbs.db
+
+## Test output
+TestResults/
+coverage/
+*.trx
+*.coverage
+
+## Frontend (src/Utsav.Web) — vendored from the legacy app
+src/Utsav.Web/node_modules/
+src/Utsav.Web/dist/
+
+## Frontend build output copied into the API on publish
+src/Utsav.Api/wwwroot/
+# Added by code-review-graph
+.code-review-graph/
+
+## Scratch workspace for superpowers:executing-plans (ledgers, briefs)
+.superpowers/

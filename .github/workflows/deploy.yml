@@ -1,0 +1,93 @@
+name: Build, test, deploy to Azure App Service
+
+on:
+  push:
+    branches: [master]
+  # Lets a deploy be re-run by hand from the Actions tab without a new commit
+  # — useful right after a portal-side config change (Application Settings,
+  # SQL firewall rule) that doesn't touch the repo at all.
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  NODE_VERSION: "22.x"
+  # The site's actual public hostname is REDACTED-HOST,
+  # but the publish profile's msdeploySite (what azure/webapps-deploy actually
+  # validates app-name against) is the shorter "puja" — using the hostname
+  # here fails with "Publish profile is invalid for app-name and slot-name
+  # provided", discovered by reading the failed run's logs rather than guessing.
+  AZURE_WEBAPP_NAME: "puja"
+
+jobs:
+  # Runs on every push, including branches that never deploy — the point is
+  # catching a break before it reaches the publish/deploy job at all, not
+  # gating a specific environment.
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore Utsav.slnx
+
+      - name: Build (warnings as errors — see Directory.Build.props)
+        run: dotnet build Utsav.slnx --no-restore --configuration Release
+
+      - name: Unit tests
+        run: dotnet test tests/Utsav.UnitTests --no-build --configuration Release
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/Utsav.Web/package-lock.json
+
+      - name: Frontend type-check
+        working-directory: src/Utsav.Web
+        run: |
+          npm ci
+          npx tsc -b
+
+  deploy:
+    needs: build-and-test
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.webapp-url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # dotnet publish shells out to npm itself (see the BuildAndCopyFrontend
+      # target in Utsav.Api.csproj) — Node just has to be on PATH for it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: src/Utsav.Web/package-lock.json
+
+      # One command produces the whole deployable artifact: the API, plus the
+      # built React app copied into wwwroot. Nothing App-Service-specific
+      # about this step — the same command works for any host.
+      - name: Publish (API + frontend into wwwroot)
+        run: dotnet publish src/Utsav.Api --configuration Release --output ./publish
+
+      # No database migration step here on purpose. This is a live committee's
+      # finance data — schema changes get applied deliberately, by hand
+      # (`dotnet ef database update`), reviewed before they run, not as a side
+      # effect of a routine deploy. See TASKLIST §2.10 / R4.
+      - name: Deploy to Azure App Service
+        id: deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ./publish

@@ -1,0 +1,46 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# build
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+
+# editor / os
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# local SQLite database (contains real donor data; rebuild with npm run seed)
+data/
+
+# generated seed (contains real donor data; regenerate with npm run import:excel)
+supabase/seed.generated.sql
+scripts/seed-data.json
+
+# compiled config side-output
+node_modules/.tmp
+
+# Local dev TLS material — never committed
+.certs/

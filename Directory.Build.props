@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!--
+      Deliberately NOT InvariantGlobalization. Microsoft.Data.SqlClient refuses
+      to run under invariant mode ("Globalization Invariant Mode is not
+      supported"), so enabling it breaks every database call, not just the
+      `dotnet ef` tooling that surfaced it. It also matters for this app's
+      domain: donor and vendor names are Bengali, and invariant mode would
+      degrade their collation and comparison.
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,235 @@
+/* =====================================================================
+   Asura's entry points in the app shell.
+
+   Separate from pages/asura/asura.css because that file is scoped under
+   .asura-root — the takeover — and these controls live in the committee
+   app's own chrome. They borrow Asura's palette deliberately: the button
+   should look like the thing it opens, not like the page it sits on.
+   ===================================================================== */
+
+.asura-navbtn,
+.asura-topbtn {
+  --an-violet: #7c3aed;
+  --an-violet-2: #a78bfa;
+  --an-cyan: #22d3ee;
+}
+
+/* ---------- mobile: the centre slot ---------------------------------- */
+
+/* An empty slot held in the flex flow purely to reserve horizontal space.
+   The control itself is positioned absolutely over it — a flex bar's
+   height is its tallest child, so leaving the button in flow made the bar
+   grow to fit it instead of letting it overhang, which is exactly the
+   effect wanted. Measured: it was rising a useless 2px above the bar. */
+.asura-navbtn-slot {
+  flex: none;
+  width: 4.5rem;
+}
+
+/* Larger than its neighbours and lifted clear of the bar, which is the whole
+   point — it is the one control here that opens a different mode of the app
+   rather than another page, so it should not read as a peer of "Members" and
+   "Tasks".
+
+   Only the LABEL lives in this box's normal flow; the disc is a separately
+   positioned child (below) that escapes flow to overshoot upward. Earlier
+   this box carried both and was translated up as one unit, which dragged the
+   label up with the disc — the label landed 12px above every other tab's
+   label instead of sitting inline with them. Keeping the disc out of this
+   box's flow is what lets the label sit at the exact same height as "Members"
+   and "Tasks" while the disc still floats above the bar.
+
+   left:50% is safe because the slot in the row above sits between two tabs
+   on each side, so the reserved space is genuinely centred. padding-bottom
+   matches the tabs' own py-2.5 exactly, which is what makes the label line up. */
+.asura-navbtn {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  z-index: 1;
+  width: 4.5rem;
+  padding: 0 0 0.625rem;
+  border: 0;
+  background: none;
+  color: var(--an-violet-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  transform: translateX(-50%);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.asura-navbtn-disc {
+  position: absolute;
+  left: 50%;
+  /* Distance from this box's bottom edge (= the label's padding edge, which
+     is the same y-coordinate as every tab's bottom edge) up to the disc's own
+     bottom. Has to clear the label's full height plus a small visual gap —
+     measured at 390px width: label box top sits ~29px above this line, so
+     28px leaves a hairline gap without the disc touching the text. Smaller
+     than this and the disc covers "Asura"; larger pushes the disc higher,
+     which is the opposite of what was asked for. */
+  bottom: 28px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  /* 48px: a clear step up from the 32px tab icons without needing as much
+     overshoot above the bar as a 56px disc would — the previous size put the
+     button noticeably higher than asked for. Still well past the 44pt floor. */
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, #3b2a66, #140d24 72%);
+  box-shadow:
+    0 0 0 1px rgba(167, 139, 250, 0.45) inset,
+    0 8px 22px -8px rgba(124, 58, 237, 0.95);
+}
+
+/* The attract loop: a ring that expands and fades outward, like a sonar
+   ping. Two of them, offset, so there is always one mid-flight. Pure
+   transform/opacity on a pseudo-element, so it costs the compositor a
+   layer and the main thread nothing. */
+.asura-navbtn-disc::before,
+.asura-navbtn-disc::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--an-cyan);
+  opacity: 0;
+  animation: asura-ping 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  pointer-events: none;
+}
+
+.asura-navbtn-disc::after { animation-delay: 1.7s; }
+
+@keyframes asura-ping {
+  0%   { transform: scale(0.85); opacity: 0.75; }
+  70%  { transform: scale(1.55); opacity: 0; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+/* A slow conic sweep behind the disc, so the button has life even between
+   pings without anything moving distractingly. */
+.asura-navbtn-halo {
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--an-violet),
+    var(--an-cyan),
+    #db2777,
+    var(--an-violet)
+  );
+  filter: blur(5px);
+  opacity: 0.75;
+  animation: asura-navspin 7s linear infinite;
+}
+
+@keyframes asura-navspin { to { transform: rotate(360deg); } }
+
+/* Sized for the tightly-cropped `compact` viewBox (see AsuraFigure), which
+   frames just the crown/mask/tusks with no halo margin — the same mask that
+   was an illegible smudge at 34px on the old full viewBox reads as a clear
+   face here, without needing a bigger disc to compensate. Sized up from an
+   earlier 32x36 to fill more of the 48px disc, and the glow switched from
+   cyan to the same violet used on the hero figure and the chat avatar
+   (.asura-av.ai below) — one mark, one colour, wherever it shows up. */
+.asura-navbtn .asura-figure {
+  width: 38px;
+  height: 42px;
+}
+
+.asura-navbtn .asura-figure .asura-glow-group {
+  filter: drop-shadow(0 0 6px rgba(124, 58, 237, 0.75));
+}
+
+.asura-navbtn-label {
+  /* No plate needed any more: the label is back in normal flow at the same
+     height as every other tab's label, which means — unlike the previous,
+     lifted version — it never sits over the bar's own top border. */
+  background-image: linear-gradient(100deg, var(--an-violet-2), var(--an-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.asura-navbtn:active .asura-navbtn-disc {
+  transform: scale(0.94);
+  transition: transform 120ms;
+}
+
+.asura-navbtn:focus-visible {
+  outline: 2px solid var(--an-violet-2);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+
+/* ---------- desktop: the top-bar button ------------------------------ */
+.asura-topbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: 2.25rem;
+  padding: 0 0.75rem 0 0.5rem;
+  border: 1px solid rgba(167, 139, 250, 0.4);
+  border-radius: 999px;
+  background: linear-gradient(110deg, rgba(124, 58, 237, 0.14), rgba(34, 211, 238, 0.1));
+  color: #6d28d9;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 160ms, background 160ms, transform 160ms, box-shadow 160ms;
+}
+
+/* Dark mode is a class on <html> in this app, so the override has to be
+   written that way rather than via prefers-color-scheme. */
+.dark .asura-topbtn {
+  border-color: rgba(167, 139, 250, 0.45);
+  background: linear-gradient(110deg, rgba(124, 58, 237, 0.26), rgba(34, 211, 238, 0.16));
+  color: #ddd6fe;
+}
+
+.asura-topbtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(167, 139, 250, 0.75);
+  box-shadow: 0 6px 18px -8px rgba(124, 58, 237, 0.8);
+}
+
+.asura-topbtn:focus-visible {
+  outline: 2px solid var(--an-violet-2);
+  outline-offset: 2px;
+}
+
+.asura-topbtn .asura-figure {
+  width: 22px;
+  height: 22px;
+}
+
+.asura-topbtn .asura-figure .asura-glow-group {
+  filter: drop-shadow(0 0 5px rgba(124, 58, 237, 0.6));
+}
+
+/* Decoration with no informational value, so it is the first thing to go.
+   The button stays fully visible and usable — only the motion stops. */
+@media (prefers-reduced-motion: reduce) {
+  .asura-navbtn-disc::before,
+  .asura-navbtn-disc::after,
+  .asura-navbtn-halo {
+    animation: none;
+  }
+
+  .asura-navbtn-disc::before,
+  .asura-navbtn-disc::after {
+    opacity: 0;
+  }
+}

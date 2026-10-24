@@ -1,0 +1,85 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <!--
+    One version per package for the whole solution. Prevents the kind of
+    cross-project transitive mismatch (e.g. Utsav.Infrastructure resolving
+    Microsoft.EntityFrameworkCore.Relational 10.0.11 while a test project
+    referencing it only via ProjectReference resolved 10.0.4) that MSB3277
+    warns about but TreatWarningsAsErrors does not catch, since it's an
+    MSBuild task warning, not a compiler one.
+  -->
+  <ItemGroup>
+    <!-- Utsav.Domain -->
+    <!-- scrypt for Node parity (server/auth.mjs hashPassword/verifyPassword) —
+         .NET has no scrypt in the BCL. Natively targets net10.0 (not a
+         .NET-Framework-only package pulled in via the compat shim — tried
+         CryptSharpOfficial first, but NuGet audit correctly flagged it as
+         net462-only under TreatWarningsAsErrors). Exposes raw N/r/p/dkLen,
+         needed to match scryptSync's defaults exactly. -->
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.62.1" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Norgerman.Cryptography.Scrypt" Version="2.5.0" />
+    <!-- Utsav.Api -->
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
+    <!-- Pinned forward past Microsoft.AspNetCore.OpenApi 10.0.10's transitive
+         Microsoft.OpenApi 2.0.0 (GHSA-v5pm-xwqc-g5wc, high severity). Remove
+         once the AspNetCore package itself references a fixed version. -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.0" />
+    <!-- Asura's Excel export. The Node side used SheetJS (xlsx), which has no
+         .NET equivalent in this solution; ClosedXML wraps OpenXML and writes
+         real typed cells so a treasurer can sum and pivot the download. -->
+    <PackageVersion Include="ClosedXML" Version="0.104.2" />
+    <!-- Utsav.Infrastructure -->
+    <!-- Azure SQL is the system of record as of 2026-08-17 (Boss's decision).
+         The schema is created code-first from these entities via EF migrations
+         so a new puja committee can be stood up with one command against an
+         empty database — see TASKLIST §2. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <!-- Referenced directly rather than left to transitive resolution so the
+         whole EFCore 10.0.11 family stays in lockstep and flows downstream to
+         projects referencing Utsav.Infrastructure — see the MSB3277 note above. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
+    <!-- tools/Utsav.DataMigration — one-way Supabase → Azure SQL copy. The only
+         place Npgsql still appears; the app itself is SQL Server only. -->
+    <PackageVersion Include="Npgsql" Version="10.0.3" />
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.2" />
+    <!-- Microsoft.Data.SqlClient 7.0.2 pulls System.Security.Cryptography.Pkcs
+         9.0.x transitively, which carries moderate/high-severity advisories
+         (GHSA-2fmv-rv2c-59x7, GHSA-846f-f764-76mx). Pinned forward to the
+         latest net10.0-era release. Remove once SqlClient itself references a
+         fixed version. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.11" />
+    <!-- External sign-in: Google ID tokens (same verification the Node app's
+         google-auth-library did) and Entra ID tokens validated against the
+         tenant's published signing keys. -->
+    <PackageVersion Include="Google.Apis.Auth" Version="1.75.0" />
+    <PackageVersion Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.22.0" />
+    <PackageVersion Include="QuestPDF" Version="2026.9.1" />
+    <!-- Feast entry tokens: generates the QR image embedded on each printed
+         token sheet (see Reports/FeastTokenSheetPdf.cs). Pure managed code,
+         no native dependency, PNG output feeds straight into a QuestPDF
+         Image() the same way any other image would. -->
+    <PackageVersion Include="QRCoder" Version="1.8.1" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+    <!-- Web Push (VAPID) — sends the transaction notifications. No paid
+         service behind it: delivery goes straight to the browser vendors'
+         own free push relays (FCM/APNs/Mozilla). -->
+    <PackageVersion Include="WebPush" Version="1.0.13" />
+    <!-- Blob storage for uploaded documents (permits, contracts). Credentials
+         are supplied later via Storage__ConnectionString — see
+         BlobStorageOptions.IsConfigured. -->
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.29.2" />
+    <!-- Test projects -->
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+</Project>

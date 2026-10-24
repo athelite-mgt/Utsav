@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/brand/favicon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- interactive-widget=resizes-content: the on-screen keyboard shrinks the
+         layout viewport rather than covering it, so a fixed-position dialog
+         stays fully on screen and scrollable while typing. Chrome/Android 108+;
+         ignored elsewhere, where lib/viewport.ts covers the same ground. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#231F20" />
+    <meta name="description" content="Durga Puja committee finance & collection management" />
+    <meta name="author" content="Athelite" />
+
+    <!-- Installable on mobile: Android/Chrome read the manifest above;
+         iOS Safari needs these specific tags to allow Add to Home Screen
+         with a standalone (no browser chrome) window. -->
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Puja Finance" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Non-blocking font load: app renders immediately with system-ui fallback,
+         then upgrades to IBM Plex when fonts arrive. Works offline. -->
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      />
+    </noscript>
+    <title>Puja Finance — Durga Puja Manager</title>
+    <!-- Google Identity Services — loaded eagerly so the Sign-In button is
+         ready the moment Login.tsx mounts. Harmless if VITE_GOOGLE_CLIENT_ID
+         is unset; GoogleSignInButton just renders nothing in that case. -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
