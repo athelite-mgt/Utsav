@@ -57,7 +57,7 @@ internal sealed class ReadOnlyQueryExecutor(
         var connection = db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync(ct);
+            await db.Database.OpenConnectionAsync(ct);
         }
 
         // Not EF's BeginTransactionAsync: this executor deliberately owns a

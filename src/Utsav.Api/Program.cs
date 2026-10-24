@@ -7,6 +7,7 @@ using Utsav.Api.Authentication;
 using Utsav.Api.Asura;
 using Utsav.Api.Endpoints;
 using Utsav.Domain.Authorization;
+using Utsav.Domain.Tenancy;
 using Utsav.Infrastructure;
 using Utsav.Infrastructure.Audit;
 using Utsav.Infrastructure.Push;
@@ -185,6 +186,37 @@ catch (Exception ex)
     app.Logger.LogError(ex, "Blob storage container bootstrap failed — continuing startup anyway. " +
         "Document uploads will fail until this is fixed.");
 }
+
+// A request that reaches data access without a committee is refused, not
+// served from an arbitrary tenant. 403 rather than 401: the caller is
+// authenticated, they simply have not selected a committee they belong to.
+// Deliberately narrow - every other exception is rethrown untouched, so the
+// framework's normal error behaviour is unchanged.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception e) when (e is TenantNotResolvedException or TenancyViolationException)
+    {
+        if (context.Response.HasStarted)
+        {
+            throw;
+        }
+
+        // A violation is a programming error (a statement the executor could
+        // not prove tenant-safe). It fails closed with the same 403, but it
+        // must be loud in the logs.
+        if (e is TenancyViolationException)
+        {
+            app.Logger.LogError(e, "Refused an unscoped statement on {Path}", context.Request.Path);
+        }
+
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = "No committee selected" });
+    }
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -307,26 +307,20 @@ public static class CrudEndpoints
     {
         var sql = table switch
         {
-            "subscriptions" => "SELECT TOP 1 d.name + ISNULL(' ' + d.surname, '') FROM subscriptions s JOIN donors d ON d.id = s.donor_id WHERE s.id = @id",
-            "ad_bookings" => "SELECT TOP 1 a.name FROM ad_bookings ab JOIN advertisers a ON a.id = ab.advertiser_id WHERE ab.id = @id",
-            "special_donations" => "SELECT TOP 1 name FROM special_donations WHERE id = @id",
-            "feasts" => "SELECT TOP 1 d.name + ISNULL(' ' + d.surname, '') FROM feasts f JOIN donors d ON d.id = f.donor_id WHERE f.id = @id",
+            "subscriptions" => "SELECT TOP 1 d.name + ISNULL(' ' + d.surname, '') FROM subscriptions s JOIN donors d ON d.id = s.donor_id WHERE s.id = @id AND s.org_id = @org",
+            "ad_bookings" => "SELECT TOP 1 a.name FROM ad_bookings ab JOIN advertisers a ON a.id = ab.advertiser_id WHERE ab.id = @id AND ab.org_id = @org",
+            "special_donations" => "SELECT TOP 1 name FROM special_donations WHERE id = @id AND org_id = @org",
+            "feasts" => "SELECT TOP 1 d.name + ISNULL(' ' + d.surname, '') FROM feasts f JOIN donors d ON d.id = f.donor_id WHERE f.id = @id AND f.org_id = @org",
             _ => null,
         };
         if (sql is null) return null;
 
         try
         {
-            var connection = db.Database.GetDbConnection();
-            if (connection.State != ConnectionState.Open)
-            {
-                await connection.OpenAsync(ct);
-            }
-
-            await using var command = connection.CreateCommand();
-            command.CommandText = sql;
-            command.Parameters.Add(new SqlParameter("@id", parentId));
-            var result = await command.ExecuteScalarAsync(ct);
+            // Through the chokepoint, so the lookup is tenant-bound and
+            // guarded like every other read.
+            var rows = await ModuleEndpoints.QueryAsync(db, sql, [new SqlParameter("@id", parentId)], ct);
+            var result = rows.FirstOrDefault()?.Values.FirstOrDefault();
             return result is null or DBNull ? null : Convert.ToString(result, System.Globalization.CultureInfo.InvariantCulture);
         }
         catch
@@ -369,29 +363,10 @@ public static class CrudEndpoints
     private static async Task<Dictionary<string, object?>?> ReadRowAsync(
         UtsavDbContext db, string table, Guid id, CancellationToken ct)
     {
-        var connection = db.Database.GetDbConnection();
-        if (connection.State != ConnectionState.Open)
-        {
-            await connection.OpenAsync(ct);
-        }
-
-        await using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT * FROM [{table}] WHERE id = @id AND org_id = @org;";
-        command.Parameters.Add(new SqlParameter("@id", id));
-        command.Parameters.Add(new SqlParameter("@org", SessionService.DefaultOrgId));
-
-        await using var reader = await command.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
-        {
-            return null;
-        }
-
-        var row = new Dictionary<string, object?>(reader.FieldCount);
-        for (var i = 0; i < reader.FieldCount; i++)
-        {
-            row[reader.GetName(i)] = await reader.IsDBNullAsync(i, ct) ? null : reader.GetValue(i);
-        }
-
-        return row;
+        // Through the chokepoint: the tenant is bound and the statement is
+        // guarded there, not re-implemented here.
+        var rows = await ModuleEndpoints.QueryAsync(
+            db, $"SELECT * FROM [{table}] WHERE id = @id AND org_id = @org;", [new SqlParameter("@id", id)], ct);
+        return rows.FirstOrDefault();
     }
 }

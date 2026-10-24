@@ -249,7 +249,7 @@ internal static class DynamicSql
             var connection = db.Database.GetDbConnection();
             if (connection.State != ConnectionState.Open)
             {
-                await connection.OpenAsync(ct);
+                await db.Database.OpenConnectionAsync(ct);
             }
 
             await using var command = connection.CreateCommand();
@@ -503,7 +503,7 @@ internal static class DynamicSql
             var connection = db.Database.GetDbConnection();
             if (connection.State != ConnectionState.Open)
             {
-                await connection.OpenAsync(ct);
+                await db.Database.OpenConnectionAsync(ct);
             }
 
             await using var command = connection.CreateCommand();
@@ -557,7 +557,7 @@ internal static class DynamicSql
                 var connection = db.Database.GetDbConnection();
                 if (connection.State != ConnectionState.Open)
                 {
-                    await connection.OpenAsync(ct);
+                    await db.Database.OpenConnectionAsync(ct);
                 }
 
                 await using var command = connection.CreateCommand();

@@ -246,7 +246,7 @@ public static class AdminEndpoints
             await transaction.CommitAsync(ct);
         });
 
-        var newYear = (await QueryAsync(db, "SELECT * FROM puja_years WHERE id=@id", [P("@id", newYearId)], ct)).FirstOrDefault();
+        var newYear = (await QueryAsync(db, "SELECT * FROM puja_years WHERE id=@id AND org_id=@org", [P("@id", newYearId)], ct)).FirstOrDefault();
         return Results.Ok(new { year = newYear, carried, budgetLinesCarried });
     }
 }

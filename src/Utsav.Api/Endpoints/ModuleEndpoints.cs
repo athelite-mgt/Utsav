@@ -305,16 +305,29 @@ public static class ModuleEndpoints
     internal static async Task<List<Dictionary<string, object?>>> QueryAsync(
         UtsavDbContext db, string sql, SqlParameter[] parameters, CancellationToken ct)
     {
+        // The executor owns the tenant. Any @org a caller passed is discarded
+        // and replaced, so a stale or forged value can never win, and no call
+        // site has to remember to supply one. A statement that touches an
+        // org-scoped table without constraining on it is refused outright.
+        var bound = parameters
+            .Where(p => !string.Equals(p.ParameterName.TrimStart('@'), "org", StringComparison.OrdinalIgnoreCase))
+            .Append(new SqlParameter("@org", db.TenantId))
+            .ToArray();
+        TenancyGuard.AssertScoped(sql, bound.Select(p => p.ParameterName));
+
+        // Opened through EF, not the raw DbConnection: only EF-initiated opens
+        // run connection interceptors, and the row-level-security interceptor
+        // must see every connection this method uses.
         var connection = db.Database.GetDbConnection();
         if (connection.State != ConnectionState.Open)
         {
-            await connection.OpenAsync(ct);
+            await db.Database.OpenConnectionAsync(ct);
         }
 
         await using var command = connection.CreateCommand();
         command.CommandText = sql;
         command.Transaction = (SqlTransaction?)db.Database.CurrentTransaction?.GetDbTransaction();
-        foreach (var parameter in parameters)
+        foreach (var parameter in bound)
         {
             command.Parameters.Add(parameter);
         }

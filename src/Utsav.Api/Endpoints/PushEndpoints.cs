@@ -70,7 +70,7 @@ public static class PushEndpoints
         // A device re-subscribing — possibly signed in as someone else now —
         // replaces its old row rather than accumulating duplicate endpoints,
         // which would each get their own copy of every push.
-        await DynamicSql.ExecuteAsync(db, "DELETE FROM push_subscriptions WHERE endpoint=@endpoint", [P("@endpoint", endpoint)], ct);
+        await DynamicSql.ExecuteAsync(db, "DELETE FROM push_subscriptions WHERE endpoint=@endpoint AND org_id=@org", [P("@endpoint", endpoint)], ct);
         await DynamicSql.ExecuteAsync(db, """
             INSERT INTO push_subscriptions (id, org_id, user_id, endpoint, p256dh, auth, user_agent)
             VALUES (@id, @org, @user, @endpoint, @p256dh, @auth, @ua)
@@ -261,7 +261,7 @@ public static class PushEndpoints
         try
         {
             await db.Database.ExecuteSqlInterpolatedAsync(
-                $"DELETE FROM notifications WHERE org_id = {SessionService.DefaultOrgId} AND created_at < {cutoff}", ct);
+                $"DELETE FROM notifications WHERE org_id = {db.TenantId} AND created_at < {cutoff}", ct);
         }
         catch
         {
@@ -269,7 +269,7 @@ public static class PushEndpoints
         }
 
         var raw = await db.Notifications.AsNoTracking()
-            .Where(n => n.OrgId == SessionService.DefaultOrgId && n.CreatedAt >= cutoff)
+            .Where(n => n.OrgId == db.TenantId && n.CreatedAt >= cutoff)
             .OrderByDescending(n => n.CreatedAt)
             .Take(5)
             .Select(n => new { n.Id, n.Title, n.Body, n.Url, n.Kind, n.ActorName, n.CreatedAt })
