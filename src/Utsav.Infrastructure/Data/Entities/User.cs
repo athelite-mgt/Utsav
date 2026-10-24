@@ -23,6 +23,16 @@ public partial class User
 
     public DateTime CreatedAt { get; set; }
 
+    /// <summary>
+    /// Platform operator: may provision committees. Deliberately a flag on the
+    /// account and NOT a committee role (AppRole), because committee roles are
+    /// granted by a committee's own admin: if this lived there, approving
+    /// someone at one committee would hand them every other committee's books.
+    /// It grants no access to any committee's data; an operator still needs an
+    /// ordinary membership to see a committee's figures.
+    /// </summary>
+    public bool IsPlatformAdmin { get; set; }
+
     public virtual ICollection<Collector> Collectors { get; set; } = new List<Collector>();
 
     public virtual ICollection<OrgMember> OrgMembers { get; set; } = new List<OrgMember>();

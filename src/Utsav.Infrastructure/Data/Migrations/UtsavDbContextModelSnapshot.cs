@@ -2252,6 +2252,12 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(256)")
                         .HasColumnName("google_sub");
 
+                    b.Property<bool>("IsPlatformAdmin")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_platform_admin");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")

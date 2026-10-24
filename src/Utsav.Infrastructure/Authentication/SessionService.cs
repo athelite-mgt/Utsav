@@ -99,7 +99,7 @@ public sealed class SessionService(UtsavDbContext db)
             // Signed in, no committee chosen. "active" means the chooser has
             // options; anything else sends them to the pending screen.
             var anyActive = memberships.Any(m => m.Status == "active");
-            return new SessionPayload(user, null, null, anyActive ? "active" : BestStatus(memberships), memberships);
+            return new SessionPayload(user, null, null, anyActive ? "active" : BestStatus(memberships), memberships, row.User.IsPlatformAdmin);
         }
 
         // Re-verified every request, deliberately: this is what makes a
@@ -107,11 +107,11 @@ public sealed class SessionService(UtsavDbContext db)
         var current = memberships.SingleOrDefault(m => m.OrgId == row.OrgId.Value);
         if (current is null || current.Status != "active")
         {
-            return new SessionPayload(user, null, null, current?.Status ?? BestStatus(memberships), memberships);
+            return new SessionPayload(user, null, null, current?.Status ?? BestStatus(memberships), memberships, row.User.IsPlatformAdmin);
         }
 
         var org = new SessionOrganization(current.OrgId, current.Name, current.Slug, current.LogoUrl, current.AccentColour);
-        return new SessionPayload(user, org, current.Role, "active", memberships);
+        return new SessionPayload(user, org, current.Role, "active", memberships, row.User.IsPlatformAdmin);
     }
 
     private static string BestStatus(IReadOnlyList<SessionMembership> memberships) =>

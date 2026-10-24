@@ -16,6 +16,9 @@ public static class LegacySessionAuthenticationDefaults
 
     /// <summary>The raw bearer token, so /auth/logout can destroy the exact session without re-parsing the header.</summary>
     public const string TokenClaimType = "puja:token";
+
+    /// <summary>Present, and "true", only for a platform operator.</summary>
+    public const string PlatformAdminClaimType = "utsav:platform_admin";
 }
 
 /// <summary>
@@ -81,6 +84,11 @@ public sealed class LegacySessionAuthenticationHandler(
         if (session.Role is not null)
         {
             claims.Add(new Claim(ClaimTypes.Role, session.Role));
+        }
+
+        if (session.IsPlatformAdmin)
+        {
+            claims.Add(new Claim(LegacySessionAuthenticationDefaults.PlatformAdminClaimType, "true"));
         }
 
         var identity = new ClaimsIdentity(claims, LegacySessionAuthenticationDefaults.SchemeName);

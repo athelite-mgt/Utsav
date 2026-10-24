@@ -15,6 +15,13 @@ public static class AuthorizationPolicies
     public const string ActiveMember = "ActiveMember";
 
     /// <summary>
+    /// A platform operator. Needs no membership of any committee, and no
+    /// committee role satisfies it: being the admin of a committee grants
+    /// nothing here.
+    /// </summary>
+    public const string PlatformAdmin = "PlatformAdmin";
+
+    /// <summary>
     /// True admin only — <see cref="Permission.ManageSettings"/> is
     /// Admin-exclusive in <see cref="PermissionMatrix"/>, so this is
     /// equivalent to (and mostly superseded by)

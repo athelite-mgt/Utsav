@@ -31,4 +31,5 @@ public sealed record SessionPayload(
     SessionOrganization? Org,
     string? Role,
     string Status,
-    IReadOnlyList<SessionMembership> Memberships);
+    IReadOnlyList<SessionMembership> Memberships,
+    bool IsPlatformAdmin);

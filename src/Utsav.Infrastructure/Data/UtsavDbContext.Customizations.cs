@@ -68,6 +68,10 @@ public partial class UtsavDbContext
             modelBuilder.Entity(entity).Property(property).HasColumnType("nvarchar(max)");
         }
 
+        modelBuilder.Entity<User>().Property(u => u.IsPlatformAdmin)
+            .HasColumnName("is_platform_admin")
+            .HasDefaultValue(false);
+
         modelBuilder.Entity<Organization>(entity =>
         {
             entity.Property(e => e.LogoUrl).HasColumnName("logo_url").HasMaxLength(1024);

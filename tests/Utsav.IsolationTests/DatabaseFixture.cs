@@ -64,12 +64,20 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>Admin of committee C only.</summary>
     public Guid UserC { get; } = Guid.NewGuid();
 
+    /// <summary>
+    /// A platform operator who belongs to NO committee. Deliberately so: the
+    /// capability must stand alone, and must not be what lets anyone read a
+    /// committee's books.
+    /// </summary>
+    public Guid UserPlatform { get; } = Guid.NewGuid();
+
     public string TokenForA { get; } = "aaaa" + Guid.NewGuid().ToString("N");
     public string TokenForB { get; } = "bbbb" + Guid.NewGuid().ToString("N");
     public string TokenUnpinned { get; } = "cccc" + Guid.NewGuid().ToString("N");
     public string TokenAOnly { get; } = "dddd" + Guid.NewGuid().ToString("N");
     public string TokenOutsider { get; } = "eeee" + Guid.NewGuid().ToString("N");
     public string TokenForC { get; } = "ffff" + Guid.NewGuid().ToString("N");
+    public string TokenPlatform { get; } = "9999" + Guid.NewGuid().ToString("N");
 
     public TenantData A { get; private set; } = null!;
     public TenantData B { get; private set; } = null!;
@@ -287,7 +295,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 new User { Id = UserInBoth, Email = "both@test.local", FullName = "Both", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
                 new User { Id = UserInAOnly, Email = "aonly@test.local", FullName = "A Only", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
                 new User { Id = UserOutsider, Email = "outsider@test.local", FullName = "Outsider", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
-                new User { Id = UserC, Email = "c@test.local", FullName = "C Admin", AuthProvider = "local", PasswordHash = hash, Role = "viewer" });
+                new User { Id = UserC, Email = "c@test.local", FullName = "C Admin", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
+                new User { Id = UserPlatform, Email = "platform@test.local", FullName = "Platform Operator", AuthProvider = "local", PasswordHash = hash, Role = "viewer", IsPlatformAdmin = true });
 
             identity.OrgMembers.AddRange(
                 new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserInBoth, Role = "admin", Status = "active" },
@@ -304,7 +313,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 new Session { Token = TokenUnpinned, UserId = UserInBoth, OrgId = null },
                 new Session { Token = TokenAOnly, UserId = UserInAOnly, OrgId = TenantA },
                 new Session { Token = TokenOutsider, UserId = UserOutsider, OrgId = null },
-                new Session { Token = TokenForC, UserId = UserC, OrgId = TenantC });
+                new Session { Token = TokenForC, UserId = UserC, OrgId = TenantC },
+                new Session { Token = TokenPlatform, UserId = UserPlatform, OrgId = null });
 
             await identity.SaveChangesAsync();
         }

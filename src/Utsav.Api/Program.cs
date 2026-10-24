@@ -52,6 +52,8 @@ builder.Services
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(AuthorizationPolicies.ActiveMember, policy =>
         policy.RequireClaim(LegacySessionAuthenticationDefaults.StatusClaimType, "active"))
+    .AddPolicy(AuthorizationPolicies.PlatformAdmin, policy =>
+        policy.RequireClaim(LegacySessionAuthenticationDefaults.PlatformAdminClaimType, "true"))
     .AddPolicy(AuthorizationPolicies.Admin, policy => policy
         .RequireClaim(LegacySessionAuthenticationDefaults.StatusClaimType, "active")
         .RequireRole(AppRole.Admin.ToWire()))
@@ -228,6 +230,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapAuthEndpoints();
+app.MapPlatformEndpoints();
 app.MapReferenceEndpoints();
 app.MapModuleEndpoints();
 app.MapFundPositionEndpoint();
