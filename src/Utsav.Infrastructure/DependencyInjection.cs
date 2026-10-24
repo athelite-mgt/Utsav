@@ -43,8 +43,12 @@ public static class DependencyInjection
         services.AddScoped<TenantContext>();
         services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
-        services.AddDbContext<UtsavDbContext>(options =>
+        services.AddScoped<TenantSessionInterceptor>();
+        services.AddDbContext<UtsavDbContext>((serviceProvider, options) =>
             options
+                // Resolved per scope so the interceptor sees THAT request's
+                // tenant, never a singleton's stale one.
+                .AddInterceptors(serviceProvider.GetRequiredService<TenantSessionInterceptor>())
                 .UseSqlServer(builder.ConnectionString, sql => sql
                     // Azure SQL throttles and fails over far more readily than a
                     // dedicated server — transient faults are an expected part of
