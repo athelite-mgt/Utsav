@@ -209,6 +209,21 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
+  /** Committee logo (a tenant-prefixed blob URL), or null to fall back to an initial. */
+  logo_url: string | null;
+  /** Brand colour as a #rgb / #rrggbb hex literal, or null for the default theme. */
+  accent_colour: string | null;
+}
+
+/** One committee the signed-in user belongs to, as returned by /auth/me. */
+export interface Membership {
+  org_id: string;
+  name: string;
+  slug: string;
+  logo_url: string | null;
+  accent_colour: string | null;
+  role: AppRole;
+  status: AccessStatus;
 }
 
 /** A membership awaiting admin approval — see Settings > Access Requests. */

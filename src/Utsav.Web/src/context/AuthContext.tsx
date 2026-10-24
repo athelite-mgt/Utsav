@@ -1,11 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, setToken, getToken, ApiError } from "@/lib/api";
 import { hasPermission } from "@/lib/permissions";
-import type { AccessStatus, AppRole, Organization, Permission, User } from "@/types/db";
+import { queryClient } from "@/lib/queryClient";
+import type { AccessStatus, AppRole, Membership, Organization, Permission, User } from "@/types/db";
 
 interface AuthContextValue {
   user: User | null;
   org: Organization | null;
+  /** Every committee this account belongs to, including pending ones. */
+  memberships: Membership[];
   role: AppRole | null;
   status: AccessStatus | null;
   can: (permission: Permission) => boolean;
@@ -15,18 +18,29 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signInWithGoogle: (credential: string) => Promise<{ error: string | null }>;
   signInWithMicrosoft: (idToken: string) => Promise<{ error: string | null }>;
+  /** Pin this session to one of the user's committees. */
+  switchCommittee: (orgId: string) => Promise<{ error: string | null }>;
+  /** Ask to join a committee by its slug; an admin there still has to approve. */
+  requestAccess: (slug: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-interface SessionPayload { user: User; org: Organization | null; role: AppRole | null; status: AccessStatus }
+interface SessionPayload {
+  user: User;
+  org: Organization | null;
+  memberships: Membership[];
+  role: AppRole | null;
+  status: AccessStatus;
+}
 interface AuthPayload extends SessionPayload { token: string }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
+  const [memberships, setMemberships] = useState<Membership[]>([]);
   const [role, setRole] = useState<AppRole | null>(null);
   const [status, setStatus] = useState<AccessStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function applySession(s: SessionPayload) {
     setUser(s.user);
     setOrg(s.org);
+    setMemberships(s.memberships ?? []);
     setRole(s.role);
     setStatus(s.status);
   }
@@ -87,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     user,
     org,
+    memberships,
     role,
     status,
     can: (permission) => hasPermission(role, permission),
@@ -97,11 +113,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle: (credential) => authenticate("/auth/google", { credential }),
     // snake_case on the wire, like every other field this API takes.
     signInWithMicrosoft: (idToken) => authenticate("/auth/entra", { id_token: idToken }),
+    async switchCommittee(orgId) {
+      try {
+        applySession(await api.post<SessionPayload>("/auth/switch-org", { org_id: orgId }));
+        // Every cached query belongs to the committee we just left. Cleared
+        // rather than invalidated: an invalidate leaves a frame where the
+        // previous committee's figures render under the new committee's name.
+        queryClient.clear();
+        return { error: null };
+      } catch (e) {
+        return { error: e instanceof ApiError ? (e as Error).message : "Could not switch committee" };
+      }
+    },
+    async requestAccess(slug) {
+      try {
+        await api.post("/auth/request-access", { slug });
+        await loadMe();
+        return { error: null };
+      } catch (e) {
+        return { error: e instanceof ApiError ? (e as Error).message : "Could not send the request" };
+      }
+    },
     async signOut() {
       try { await api.post("/auth/logout"); } catch { /* token may already be gone */ }
       setToken(null);
       setUser(null);
       setOrg(null);
+      setMemberships([]);
+      queryClient.clear();
       setRole(null);
       setStatus(null);
     },

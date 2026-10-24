@@ -76,6 +76,16 @@ public static class DependencyInjection
     /// </summary>
     private static IServiceCollection AddAuditTrail(this IServiceCollection services, IConfiguration configuration)
     {
+        // Cosmos is the default and a missing Cosmos configuration fails
+        // startup. Writing audit to the log instead is something you ask for
+        // by name (Audit:Mode=Log), so an unconfigured production deployment
+        // can never quietly run with no audit trail.
+        if (string.Equals(configuration["Audit:Mode"], "Log", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IAuditSink, LoggingAuditSink>();
+            return services;
+        }
+
         services.AddSingleton(_ =>
         {
             var endpoint = configuration["Cosmos:Endpoint"]

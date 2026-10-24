@@ -147,7 +147,11 @@ app.UseStaticFiles(staticFileOptions);
 // not on the critical path for a committee member's actual save (TASKLIST §5.6).
 try
 {
-    await app.Services.GetRequiredService<CosmosAuditSink>().EnsureContainerExistsAsync();
+    // Only when Cosmos is the audit store; Audit:Mode=Log has none to prepare.
+    if (app.Services.GetService<CosmosAuditSink>() is { } cosmosSink)
+    {
+        await cosmosSink.EnsureContainerExistsAsync();
+    }
 }
 catch (Exception ex)
 {

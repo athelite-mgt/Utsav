@@ -68,6 +68,20 @@ export async function subscribeToPush(): Promise<void> {
   await api.post("/push/subscribe", subscription.toJSON());
 }
 
+/**
+ * Registers the browser's existing subscription with the committee the user is
+ * currently in. A device's registration belongs to one committee, so a member
+ * of two needs it refreshed after switching or they would only hear about the
+ * committee they happened to enable notifications in. A no-op unless the user
+ * has already granted permission and the browser already holds a subscription.
+ */
+export async function syncPushRegistration(): Promise<void> {
+  if (!isPushSupported() || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const subscription = await getExistingSubscription();
+  if (!subscription) return;
+  await api.post("/push/subscribe", subscription.toJSON());
+}
+
 export async function unsubscribeFromPush(): Promise<void> {
   const subscription = await getExistingSubscription();
   if (!subscription) return;

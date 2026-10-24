@@ -1,16 +1,37 @@
-import { Hourglass, LogOut, RefreshCw } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Hourglass, LogOut, RefreshCw, Send } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { BrandMark } from "@/components/layout/NavContent";
 
 /**
- * Shown after a successful sign-in whose committee membership isn't
- * 'active' yet — either a brand-new request (status 'pending') or,
- * defensively, no request at all (status 'none'). Signing in never grants
- * access by itself; an admin has to approve from Settings > Access Requests.
+ * Shown after a successful sign-in that doesn't yet have an active committee
+ * membership: either a request awaiting approval (status 'pending') or no
+ * request at all (status 'none'). Signing in never grants access by itself; an
+ * admin has to approve from Settings > Access Requests.
+ *
+ * There is no default committee, so someone with no request yet names the one
+ * they want to join, by its short name (slug).
  */
 export function PendingApproval() {
-  const { user, signOut, refreshSession } = useAuth();
+  const { user, memberships, signOut, refreshSession, requestAccess } = useAuth();
+  const [slug, setSlug] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const pending = memberships.filter((m) => m.status === "pending");
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!slug.trim()) return;
+    setBusy(true);
+    setError(null);
+    const result = await requestAccess(slug.trim());
+    setBusy(false);
+    if (result.error) setError(result.error);
+    else setSlug("");
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
@@ -18,12 +39,37 @@ export function PendingApproval() {
         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gold/10 text-gold">
           <Hourglass className="h-7 w-7" />
         </div>
-        <h1 className="font-display text-xl font-bold">Waiting for approval</h1>
+        <h1 className="font-display text-xl font-bold">
+          {pending.length > 0 ? "Waiting for approval" : "Join a committee"}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Signed in as <span className="font-medium text-foreground">{user?.email}</span>. A committee admin
-          needs to approve your access before you can see anything — they'll do this from
-          Settings &gt; Access Requests.
+          Signed in as <span className="font-medium text-foreground">{user?.email}</span>.{" "}
+          {pending.length > 0 ? (
+            <>
+              Your request to join{" "}
+              <span className="font-medium text-foreground">{pending.map((m) => m.name).join(", ")}</span> is
+              waiting. A committee admin needs to approve it from Settings &gt; Access Requests.
+            </>
+          ) : (
+            <>Enter your committee's short name and its admin will be asked to approve you.</>
+          )}
         </p>
+
+        <form onSubmit={submit} className="mt-5 flex gap-2 text-left">
+          <Input
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder="Committee short name, e.g. barrackpore-kali"
+            aria-label="Committee short name"
+            autoCapitalize="none"
+            autoCorrect="off"
+          />
+          <Button type="submit" disabled={busy || !slug.trim()}>
+            <Send /> Request
+          </Button>
+        </form>
+        {error && <p className="mt-2 text-left text-sm text-destructive">{error}</p>}
+
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">
           <Button variant="outline" className="flex-1" onClick={() => refreshSession()}>
             <RefreshCw /> Check again

@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { navItems, type NavItem } from "@/config/nav";
 import { useAuth } from "@/context/AuthContext";
 import { AppLogoTile } from "@/components/brand/Athelite";
+import { CommitteeSwitcher } from "@/components/layout/CommitteeSwitcher";
 import { cn } from "@/lib/utils";
 
 const groupLabels: Record<NavItem["group"], string> = {
@@ -20,6 +21,7 @@ export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 py-4 no-scrollbar">
+      <CommitteeSwitcher />
       {groups.map((g) => {
         const groupItems = items.filter((n) => n.group === g);
         if (!groupItems.length) return null;
@@ -57,13 +59,17 @@ export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function BrandMark({ compact }: { compact?: boolean }) {
+  // The committee's own name leads once someone is working inside one; before
+  // that (sign-in, choosing a committee) it is just the product.
+  const { org } = useAuth();
+
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex min-w-0 items-center gap-2.5">
       <AppLogoTile className="h-9 w-9" />
       {!compact && (
-        <div className="leading-tight">
-          <p className="font-display text-sm font-bold tracking-tight">Puja Finance</p>
-          <p className="text-[11px] text-muted-foreground">Durga Puja Manager · by Athelite</p>
+        <div className="min-w-0 leading-tight">
+          <p className="truncate font-display text-sm font-bold tracking-tight">{org?.name ?? "Utsav"}</p>
+          <p className="truncate text-[11px] text-muted-foreground">Utsav · by Athelite</p>
         </div>
       )}
     </div>

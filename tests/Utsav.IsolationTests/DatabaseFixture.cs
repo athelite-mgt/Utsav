@@ -102,18 +102,14 @@ public sealed class DatabaseFixture : IAsyncLifetime
         // top-level code, which a late test-time setting is not.
         Environment.SetEnvironmentVariable("ConnectionStrings__AzureSql", AppConnection());
 
+        // Cosmos is not available offline, so audit goes to the in-memory sink
+        // (which also lets tests assert which committee each event was filed
+        // under). Selected explicitly: the app's default is Cosmos.
+        Environment.SetEnvironmentVariable("Audit__Mode", "Log");
+
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureServices(services =>
             {
-                // Cosmos is not available offline. The audit worker is removed
-                // and the sink replaced, which also lets tests assert which
-                // tenant each audit event was filed under.
-                var worker = services.Where(d => d.ImplementationType == typeof(AuditQueueProcessor)).ToList();
-                foreach (var descriptor in worker)
-                {
-                    services.Remove(descriptor);
-                }
-
                 services.RemoveAll<IAuditSink>();
                 services.AddSingleton<IAuditSink>(Audit);
                 services.RemoveAll<IBlobStorageService>();

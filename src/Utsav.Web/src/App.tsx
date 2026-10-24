@@ -8,6 +8,8 @@ import { AppLogoTile } from "@/components/brand/Athelite";
 import { Login } from "@/pages/Login";
 import { ServerOffline } from "@/pages/ServerOffline";
 import { PendingApproval } from "@/pages/PendingApproval";
+import { ChooseCommittee } from "@/pages/ChooseCommittee";
+import { useSyncPushRegistration } from "@/hooks/useSyncPushRegistration";
 import { Dashboard } from "@/pages/Dashboard";
 import { ReportsPage } from "@/pages/Reports";
 import { MembershipPage } from "@/pages/Membership";
@@ -74,15 +76,27 @@ function HistoryRoute({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
-  const { loading, user, status, serverDown } = useAuth();
+  const { loading, user, org, memberships, status, serverDown } = useAuth();
+
+  // Keeps this device's push registration in step with the committee the
+  // user is working in: a device is registered per committee, so it must be
+  // re-registered after switching.
+  useSyncPushRegistration(org?.id ?? null);
 
   if (loading) return <FullScreenLoader />;
   if (serverDown) return <ServerOffline />;
   if (!user) return <Login />;
   if (status !== "active") return <PendingApproval />;
+  // Active somewhere but no committee chosen yet: a user with several. Every
+  // data endpoint refuses them until they pick one.
+  if (!org && memberships.some((m) => m.status === "active")) return <ChooseCommittee />;
 
   return (
-    <YearProvider>
+    // Keyed by committee so switching remounts everything below: the selected
+    // puja year, page-local state and form drafts all belong to the committee
+    // just left, and carrying a year id across would ask the new committee for
+    // a year it does not have.
+    <YearProvider key={org?.id}>
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={<Dashboard />} />

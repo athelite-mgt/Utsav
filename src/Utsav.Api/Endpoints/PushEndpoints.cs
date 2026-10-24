@@ -188,7 +188,7 @@ public static class PushEndpoints
     /// matches — the page just shows the notification's own title/body then.
     /// </summary>
     private static async Task<IResult> GetDetailAsync(
-        Guid id, CosmosClient cosmos, IConfiguration configuration, UtsavDbContext db, CancellationToken ct)
+        Guid id, IServiceProvider services, IConfiguration configuration, UtsavDbContext db, CancellationToken ct)
     {
         var notification = await db.Notifications.AsNoTracking()
             .Where(n => n.Id == id && n.OrgId == db.TenantId)
@@ -211,6 +211,13 @@ public static class PushEndpoints
             ?? throw new InvalidOperationException("Missing configuration: Cosmos:Database");
         var containerName = configuration["Cosmos:Container"]
             ?? throw new InvalidOperationException("Missing configuration: Cosmos:Container");
+        // No Cosmos when audit is deliberately going to the log (Audit:Mode=Log);
+        // the page then just shows the notification's own title and body.
+        if (services.GetService<CosmosClient>() is not { } cosmos)
+        {
+            return Results.Ok(new { found = false });
+        }
+
         var container = cosmos.GetContainer(database, containerName);
         var orgId = db.TenantId.ToString();
 

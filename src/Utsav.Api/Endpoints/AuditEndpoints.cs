@@ -56,10 +56,19 @@ public static class AuditEndpoints
     };
 
     private static async Task<IResult> ListAsync(
-        CosmosClient cosmos, IConfiguration configuration, Utsav.Domain.Tenancy.ITenantContext tenant,
+        IServiceProvider services, IConfiguration configuration, Utsav.Domain.Tenancy.ITenantContext tenant,
         string? entityType, Guid? userId, DateTimeOffset? from, DateTimeOffset? to,
         int? limit, string? continuationToken, CancellationToken ct)
     {
+        // Absent only when audit is deliberately going to the log (Audit:Mode=Log);
+        // there is then nothing to read back, and saying so beats a 500.
+        if (services.GetService<CosmosClient>() is not { } cosmos)
+        {
+            return Results.Json(
+                new { error = "The audit trail isn't stored in Cosmos in this environment (Audit:Mode=Log)." },
+                statusCode: 503);
+        }
+
         var database = configuration["Cosmos:Database"]
             ?? throw new InvalidOperationException("Missing configuration: Cosmos:Database");
         var containerName = configuration["Cosmos:Container"]
