@@ -19,7 +19,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddPujaInfrastructure(builder.Configuration);
+builder.Services.AddUtsavInfrastructure(builder.Configuration);
 // Registers nothing at all unless Asura:Enabled is true — see AddAsura. With
 // the flag off there is no service to resolve and no route to reach, so this
 // deploy cannot change how the app behaves for a committee member.

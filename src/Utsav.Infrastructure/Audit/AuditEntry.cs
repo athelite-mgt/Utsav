@@ -7,7 +7,7 @@ namespace Utsav.Infrastructure.Audit;
 /// <see cref="Id"/> and <see cref="OrgId"/> are the Cosmos item id and
 /// partition key (<c>/orgId</c> — TASKLIST §5.3); every other property name
 /// is written camelCase (see <c>CosmosClientOptions.SerializerOptions</c> in
-/// <c>DependencyInjection.AddPujaInfrastructure</c>) so the wire shape
+/// <c>DependencyInjection.AddUtsavInfrastructure</c>) so the wire shape
 /// matches that partition key path exactly.
 /// </summary>
 public sealed record AuditEntry(

@@ -4,10 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Utsav.Domain.Tenancy;
 using Utsav.Infrastructure.Audit;
 using Utsav.Infrastructure.Data;
 using Utsav.Infrastructure.Push;
 using Utsav.Infrastructure.Storage;
+using Utsav.Infrastructure.Tenancy;
 
 namespace Utsav.Infrastructure;
 
@@ -22,7 +24,7 @@ public static class DependencyInjection
     private const int MinPoolSize = 5;
     private const int MaxPoolSize = 20;
 
-    public static IServiceCollection AddPujaInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddUtsavInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("AzureSql")
             ?? throw new InvalidOperationException("Missing configuration: ConnectionStrings:AzureSql");
@@ -32,6 +34,14 @@ public static class DependencyInjection
             MinPoolSize = MinPoolSize,
             MaxPoolSize = MaxPoolSize,
         };
+
+        // One instance per request: resolved by the auth handler, read by the
+        // query filters, the SQL chokepoints and the RLS interceptor. Both
+        // registrations return the same instance - consumers take
+        // ITenantContext, only the auth handlers take TenantContext to call
+        // Resolve.
+        services.AddScoped<TenantContext>();
+        services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
         services.AddDbContext<UtsavDbContext>(options =>
             options
