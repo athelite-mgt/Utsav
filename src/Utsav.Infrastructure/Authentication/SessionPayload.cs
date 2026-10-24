@@ -3,7 +3,7 @@ namespace Utsav.Infrastructure.Authentication;
 public sealed record SessionUser(Guid Id, string Email, string? FullName, string AuthProvider);
 
 public sealed record SessionOrganization(
-    Guid Id, string Name, string Slug, string? LogoUrl, string? AccentColour);
+    Guid Id, string Name, string Slug, string? City, string? LogoUrl, string? AccentColour);
 
 /// <summary>
 /// One committee this user belongs to. The switcher renders this list, so it
@@ -11,7 +11,7 @@ public sealed record SessionOrganization(
 /// second round trip.
 /// </summary>
 public sealed record SessionMembership(
-    Guid OrgId, string Name, string Slug, string? LogoUrl, string? AccentColour, string Role, string Status);
+    Guid OrgId, string Name, string Slug, string? City, string? LogoUrl, string? AccentColour, string Role, string Status);
 
 /// <summary>
 /// What <c>/auth/me</c> returns, and what the authentication handler resolves

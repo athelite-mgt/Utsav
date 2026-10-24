@@ -42,7 +42,7 @@ internal static class FeastTokenSheetPdf
         }
     }
 
-    internal static byte[] Render(IReadOnlyList<FeastToken> tokens, string orgName, int pujaYear, DateTime printedOnUtc)
+    internal static byte[] Render(IReadOnlyList<FeastToken> tokens, ReportLetterhead letterhead, int pujaYear, DateTime printedOnUtc)
     {
         EnsureFonts();
 
@@ -71,7 +71,7 @@ internal static class FeastTokenSheetPdf
 
                         foreach (var token in pageTokens)
                         {
-                            table.Cell().Element(c => Coupon(c, token, orgName, pujaYear, printedOn));
+                            table.Cell().Element(c => Coupon(c, token, letterhead, pujaYear, printedOn));
                         }
                     });
                 });
@@ -79,7 +79,7 @@ internal static class FeastTokenSheetPdf
         }).GeneratePdf();
     }
 
-    private static void Coupon(IContainer container, FeastToken token, string orgName, int pujaYear, string printedOn) =>
+    private static void Coupon(IContainer container, FeastToken token, ReportLetterhead letterhead, int pujaYear, string printedOn) =>
         container
             .Padding(5)
             .Height(150)
@@ -89,7 +89,18 @@ internal static class FeastTokenSheetPdf
             .Column(col =>
             {
                 col.Spacing(4);
-                col.Item().Text(orgName).FontSize(12).Bold().FontColor(Maroon);
+                col.Item().Row(head =>
+                {
+                    if (letterhead.Logo is not null)
+                    {
+                        head.ConstantItem(26).PaddingRight(6).Height(22).Image(letterhead.Logo).FitArea();
+                    }
+
+                    // The committee's own colour where it has one; otherwise the
+                    // maroon these coupons have always used.
+                    head.RelativeItem().AlignMiddle().Text(letterhead.CommitteeName).FontSize(12).Bold()
+                        .FontColor(letterhead.AccentHex is { } hex ? Color.FromHex(hex) : Maroon);
+                });
                 col.Item().Text($"Feast {pujaYear} · {printedOn}").FontSize(8).FontColor(Colors.Grey.Darken2);
 
                 col.Item().PaddingTop(2).Row(row =>

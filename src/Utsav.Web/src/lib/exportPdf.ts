@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { NotoSansBengaliRegular } from "./fonts/NotoSansBengaliRegular";
 import { NotoSansBengaliBold } from "./fonts/NotoSansBengaliBold";
+import { accentRgb, getLetterhead, pdfImageFormat } from "./letterhead";
 
 const BENGALI_FONT = "NotoSansBengali";
 
@@ -13,12 +14,59 @@ const BENGALI_FONT = "NotoSansBengali";
  * and English mixed freely — no per-run font switching needed. jsPDF fonts
  * are registered per document instance, so this runs once per exported PDF.
  */
-function embedBengaliFont(doc: jsPDF) {
+export function embedBengaliFont(doc: jsPDF) {
   doc.addFileToVFS("NotoSansBengali-Regular.ttf", NotoSansBengaliRegular);
   doc.addFont("NotoSansBengali-Regular.ttf", BENGALI_FONT, "normal");
   doc.addFileToVFS("NotoSansBengali-Bold.ttf", NotoSansBengaliBold);
   doc.addFont("NotoSansBengali-Bold.ttf", BENGALI_FONT, "bold");
   doc.setFont(BENGALI_FONT, "normal");
+}
+
+/**
+ * The committee's own heading, drawn first on every document: logo, name,
+ * city and a rule in its brand colour. These PDFs go to auditors and donors,
+ * so they read as the committee's, not the product's. With no committee
+ * context (or no logo) it degrades quietly; a document is never refused over
+ * its letterhead. Returns the y at which the title should start.
+ */
+export function drawLetterhead(doc: jsPDF, marginX: number, defaultY: number): number {
+  const head = getLetterhead();
+  if (!head) return defaultY;
+
+  const top = 34;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  let textX = marginX;
+
+  const format = head.logoDataUrl ? pdfImageFormat(head.logoDataUrl) : null;
+  if (head.logoDataUrl && format) {
+    try {
+      doc.addImage(head.logoDataUrl, format, marginX, top, 34, 34);
+      textX = marginX + 34 + 10;
+    } catch {
+      // An image jsPDF cannot draw is simply left out.
+    }
+  }
+
+  doc.setFont(BENGALI_FONT, "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(0);
+  doc.text(head.name, textX, top + 13);
+  if (head.city) {
+    doc.setFont(BENGALI_FONT, "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(110);
+    doc.text(head.city, textX, top + 26);
+  }
+
+  const [r, g, b] = accentRgb(head.accent) ?? [190, 190, 190];
+  doc.setDrawColor(r, g, b);
+  doc.setLineWidth(1.4);
+  doc.line(marginX, top + 42, pageWidth - marginX, top + 42);
+
+  doc.setTextColor(0);
+  doc.setDrawColor(0);
+  doc.setLineWidth(0.2);
+  return top + 42 + 22;
 }
 
 export interface PdfColumn {
@@ -47,7 +95,7 @@ export function exportPdfTable(opts: {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   embedBengaliFont(doc);
   const marginX = 40;
-  let y = 48;
+  let y = drawLetterhead(doc, marginX, 48);
 
   doc.setFontSize(15);
   doc.setFont(BENGALI_FONT, "bold");
@@ -120,7 +168,7 @@ export function exportPdfSections(opts: {
   embedBengaliFont(doc);
   const marginX = 40;
   const pageWidth = doc.internal.pageSize.getWidth();
-  let y = 48;
+  let y = drawLetterhead(doc, marginX, 48);
 
   doc.setFontSize(16);
   doc.setFont(BENGALI_FONT, "bold");

@@ -47,7 +47,7 @@ internal static class AuditReportPdf
         }
     }
 
-    internal static byte[] Render(AuditReportEndpoint.AuditReportDto r)
+    internal static byte[] Render(AuditReportEndpoint.AuditReportDto r, ReportLetterhead letterhead)
     {
         EnsureFonts();
 
@@ -59,12 +59,7 @@ internal static class AuditReportPdf
                 page.Margin(28);
                 page.DefaultTextStyle(t => t.FontFamily(FontFamily).FontSize(9));
 
-                page.Header().Column(col =>
-                {
-                    col.Item().Text(r.OrgName).FontSize(16).Bold();
-                    col.Item().Text($"Financial Statements — {r.YearLabel}").FontSize(10).FontColor(Colors.Grey.Darken2);
-                    col.Item().PaddingTop(6).LineHorizontal(1).LineColor(Colors.Grey.Lighten1);
-                });
+                page.Header().Element(header => letterhead.ComposeHeader(header, $"Financial Statements — {r.YearLabel}"));
 
                 page.Content().PaddingVertical(8).Column(col =>
                 {

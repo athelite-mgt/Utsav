@@ -1,5 +1,7 @@
 using ClosedXML.Excel;
 using Utsav.Api.Asura;
+using Utsav.Api.Reports;
+using Utsav.UnitTests.Reports;
 
 namespace Utsav.UnitTests.Asura;
 
@@ -12,6 +14,8 @@ namespace Utsav.UnitTests.Asura;
 public class AsuraExportTests
 {
     private static readonly AsuraTool Tool = ToolCatalogue.Tools["collections_by_zone"];
+
+    private static readonly ReportLetterhead Head = new("Barrackpore Kali Puja", "Barrackpore", "#7f1d1d", null);
 
     /// <summary>
     /// Deliberately includes a Bengali name and a null: the Bengali exercises
@@ -46,7 +50,7 @@ public class AsuraExportTests
     [Fact]
     public void Pdf_renders_a_real_document()
     {
-        var bytes = AsuraExport.Pdf(Tool, Sample(), "Which zones are behind?");
+        var bytes = AsuraExport.Pdf(Tool, Sample(), "Which zones are behind?", Head);
 
         // %PDF- magic number, and big enough to actually contain a table
         // rather than being an empty single page.
@@ -59,7 +63,7 @@ public class AsuraExportTests
     {
         // Both of these threw or silently produced blank boxes in earlier
         // report work in this repo, so they are pinned here.
-        var exception = Record.Exception(() => AsuraExport.Pdf(Tool, Sample(), null));
+        var exception = Record.Exception(() => AsuraExport.Pdf(Tool, Sample(), null, Head));
         Assert.Null(exception);
     }
 
@@ -69,21 +73,21 @@ public class AsuraExportTests
         // The point of offering Excel rather than a screenshot: a treasurer has
         // to be able to sum and pivot the column. A spreadsheet of strings
         // looks identical and is useless.
-        var bytes = AsuraExport.Excel(Tool, Sample(), "Which zones are behind?");
+        var bytes = AsuraExport.Excel(Tool, Sample(), "Which zones are behind?", Head);
 
         using var ms = new MemoryStream(bytes);
         using var workbook = new XLWorkbook(ms);
         var sheet = workbook.Worksheets.First();
 
-        var header = sheet.Row(5);
+        var header = sheet.Row(7);
         var zoneColumn = Enumerable.Range(1, 10)
             .First(c => header.Cell(c).GetString().Equals("Zone", StringComparison.OrdinalIgnoreCase));
         var collectedColumn = Enumerable.Range(1, 10)
             .First(c => header.Cell(c).GetString().Equals("Collected", StringComparison.OrdinalIgnoreCase));
 
-        Assert.Equal("শ্যামবাজার উত্তর", sheet.Row(6).Cell(zoneColumn).GetString());
+        Assert.Equal("শ্যামবাজার উত্তর", sheet.Row(8).Cell(zoneColumn).GetString());
 
-        var collected = sheet.Row(6).Cell(collectedColumn);
+        var collected = sheet.Row(8).Cell(collectedColumn);
         Assert.Equal(XLDataType.Number, collected.DataType);
         Assert.Equal(126_000d, collected.GetDouble());
     }
@@ -93,11 +97,11 @@ public class AsuraExportTests
     {
         // A download detached from the app is exactly where "where did this
         // number come from?" gets asked, so the answer ships inside the file.
-        var bytes = AsuraExport.Excel(Tool, Sample(), "Which zones are behind?");
+        var bytes = AsuraExport.Excel(Tool, Sample(), "Which zones are behind?", Head);
 
         using var ms = new MemoryStream(bytes);
         using var workbook = new XLWorkbook(ms);
-        var provenance = workbook.Worksheets.First().Cell(3, 1).GetString();
+        var provenance = workbook.Worksheets.First().Cell(5, 1).GetString();
 
         Assert.Contains("subscriptions", provenance);
         Assert.Contains("zones", provenance);
@@ -110,7 +114,7 @@ public class AsuraExportTests
         // by failing to open the file at all, so every tool title is checked.
         foreach (var tool in ToolCatalogue.Tools.Values)
         {
-            var bytes = AsuraExport.Excel(tool, Sample(), null);
+            var bytes = AsuraExport.Excel(tool, Sample(), null, Head);
             using var ms = new MemoryStream(bytes);
             using var workbook = new XLWorkbook(ms);
             var name = workbook.Worksheets.First().Name;
@@ -120,5 +124,40 @@ public class AsuraExportTests
                 name.IndexOfAny(['\\', '/', ':', '*', '?', '[', ']']) < 0,
                 $"{tool.Id}: sheet name '{name}' contains a character Excel rejects");
         }
+    }
+
+    [Fact]
+    public void Excel_opens_with_the_committees_own_name_and_city()
+    {
+        var bytes = AsuraExport.Excel(Tool, Sample(), null, Head);
+
+        using var workbook = new XLWorkbook(new MemoryStream(bytes));
+        var sheet = workbook.Worksheets.First();
+
+        Assert.Equal("Barrackpore Kali Puja", sheet.Cell(1, 1).GetString());
+        Assert.Equal("Barrackpore", sheet.Cell(2, 1).GetString());
+        // The report title still follows, and nothing in the first rows names the product.
+        Assert.Equal(Tool.Title, sheet.Cell(3, 1).GetString());
+        for (var row = 1; row <= 5; row++)
+        {
+            Assert.DoesNotContain("Utsav", sheet.Cell(row, 1).GetString(), StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void Pdf_with_a_logo_embeds_the_image_and_without_one_does_not()
+    {
+        var withLogo = new ReportLetterhead("Barrackpore Kali Puja", "Barrackpore", "#7f1d1d", TestImages.Png());
+
+        var plain = AsuraExport.Pdf(Tool, Sample(), null, Head);
+        var branded = AsuraExport.Pdf(Tool, Sample(), null, withLogo);
+
+        Assert.True(CountImages(branded) > CountImages(plain), "the logo was not embedded in the PDF");
+    }
+
+    private static int CountImages(byte[] pdf)
+    {
+        var text = System.Text.Encoding.Latin1.GetString(pdf);
+        return System.Text.RegularExpressions.Regex.Matches(text, @"/Subtype\s*/Image").Count;
     }
 }

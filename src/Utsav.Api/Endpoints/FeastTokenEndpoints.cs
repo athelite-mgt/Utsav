@@ -123,7 +123,8 @@ public static class FeastTokenEndpoints
     /// second print run for more tokens picks up where the first left off
     /// rather than colliding with or restarting it.
     /// </summary>
-    private static async Task<IResult> PrintAsync(JsonElement body, UtsavDbContext db, CancellationToken ct)
+    private static async Task<IResult> PrintAsync(
+        JsonElement body, UtsavDbContext db, Utsav.Infrastructure.Storage.IBlobStorageService storage, CancellationToken ct)
     {
         if (!body.TryGetProperty("year_id", out var yearEl) || !Guid.TryParse(yearEl.GetString(), out var yearId))
         {
@@ -153,7 +154,6 @@ public static class FeastTokenEndpoints
         }
 
         var pujaYear = Convert.ToInt32(yearRow["year"]);
-        var orgName = yearRow["org_name"] as string ?? "Puja Committee";
 
         List<FeastToken> created = [];
         var strategy = db.Database.CreateExecutionStrategy();
@@ -197,7 +197,8 @@ public static class FeastTokenEndpoints
             await transaction.CommitAsync(ct);
         });
 
-        var bytes = FeastTokenSheetPdf.Render(created, orgName, pujaYear, DateTime.UtcNow);
+        var letterhead = await ReportLetterhead.LoadAsync(db, storage, ct);
+        var bytes = FeastTokenSheetPdf.Render(created, letterhead, pujaYear, DateTime.UtcNow);
         return Results.File(bytes, "application/pdf", $"feast-tokens-{pujaYear}-{created[0].Code}-to-{created[^1].Code}.pdf");
     }
 

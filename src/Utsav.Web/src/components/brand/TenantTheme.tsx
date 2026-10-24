@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { brandVariables } from "@/lib/brand";
+import { loadLogoDataUrl, setLetterhead } from "@/lib/letterhead";
 
 const VARIABLES = ["--primary", "--primary-foreground", "--ring"] as const;
 
@@ -42,6 +43,29 @@ export function TenantTheme() {
       clear();
     };
   }, [accent]);
+
+  const name = org?.name;
+  const city = org?.city ?? null;
+  const logoUrl = org?.logo_url ?? null;
+
+  // The heading for documents this browser builds. Set at once so exports work
+  // immediately, then again with the logo once it has been fetched.
+  useEffect(() => {
+    if (!name) {
+      setLetterhead(null);
+      return;
+    }
+
+    let cancelled = false;
+    setLetterhead({ name, city, accent, logoDataUrl: null });
+    void loadLogoDataUrl(logoUrl).then((logoDataUrl) => {
+      if (!cancelled) setLetterhead({ name, city, accent, logoDataUrl });
+    });
+    return () => {
+      cancelled = true;
+      setLetterhead(null);
+    };
+  }, [name, city, accent, logoUrl]);
 
   useEffect(() => {
     // A member has one committee's app open, not "Utsav".

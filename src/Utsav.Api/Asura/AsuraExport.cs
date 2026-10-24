@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using ClosedXML.Excel;
+using Utsav.Api.Reports;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
@@ -78,7 +79,7 @@ internal static class AsuraExport
         }
     }
 
-    public static byte[] Pdf(AsuraTool tool, QueryResult result, string? question)
+    public static byte[] Pdf(AsuraTool tool, QueryResult result, string? question, ReportLetterhead letterhead)
     {
         EnsureFonts();
 
@@ -98,6 +99,9 @@ internal static class AsuraExport
 
                 page.Header().Column(header =>
                 {
+                    // Whose report this is comes first: it travels to auditors
+                    // and committee members with nothing else to place it.
+                    header.Item().PaddingBottom(6).Element(c => letterhead.ComposeHeader(c, subtitle: null, nameSize: 12, withRule: false));
                     header.Item().Text(tool.Title).FontSize(15).SemiBold();
                     if (!string.IsNullOrWhiteSpace(question))
                     {
@@ -171,7 +175,7 @@ internal static class AsuraExport
         }).GeneratePdf();
     }
 
-    public static byte[] Excel(AsuraTool tool, QueryResult result, string? question)
+    public static byte[] Excel(AsuraTool tool, QueryResult result, string? question, ReportLetterhead letterhead)
     {
         using var workbook = new XLWorkbook();
 
@@ -181,19 +185,30 @@ internal static class AsuraExport
 
         var columns = result.Columns.ToList();
 
-        sheet.Cell(1, 1).Value = tool.Title;
+        // Rows 1-2: whose report this is. Fixed positions (the city row is left
+        // empty rather than omitted) so every sheet has the same layout.
+        sheet.Cell(1, 1).Value = letterhead.CommitteeName;
         sheet.Cell(1, 1).Style.Font.Bold = true;
-        sheet.Cell(1, 1).Style.Font.FontSize = 13;
+        sheet.Cell(1, 1).Style.Font.FontSize = 14;
+        if (!string.IsNullOrWhiteSpace(letterhead.City))
+        {
+            sheet.Cell(2, 1).Value = letterhead.City;
+            sheet.Cell(2, 1).Style.Font.FontColor = XLColor.Gray;
+        }
 
-        sheet.Cell(2, 1).Value = string.IsNullOrWhiteSpace(question) ? tool.Question : $"Asked: {question}";
-        sheet.Cell(3, 1).Value =
+        sheet.Cell(3, 1).Value = tool.Title;
+        sheet.Cell(3, 1).Style.Font.Bold = true;
+        sheet.Cell(3, 1).Style.Font.FontSize = 13;
+
+        sheet.Cell(4, 1).Value = string.IsNullOrWhiteSpace(question) ? tool.Question : $"Asked: {question}";
+        sheet.Cell(5, 1).Value =
             $"Generated {DateTime.UtcNow:dd MMM yyyy HH:mm} UTC · {result.Rows.Count:N0} rows"
             + (result.Truncated ? " (capped)" : "")
             + $" · source: {string.Join(", ", AsuraOrchestrator.TablesIn(tool.Sql))}";
-        sheet.Cell(3, 1).Style.Font.FontSize = 9;
-        sheet.Cell(3, 1).Style.Font.FontColor = XLColor.Gray;
+        sheet.Cell(5, 1).Style.Font.FontSize = 9;
+        sheet.Cell(5, 1).Style.Font.FontColor = XLColor.Gray;
 
-        const int headerRow = 5;
+        const int headerRow = 7;
         for (var c = 0; c < columns.Count; c++)
         {
             var cell = sheet.Cell(headerRow, c + 1);

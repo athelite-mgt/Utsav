@@ -56,7 +56,8 @@ public static class AuditReportEndpoint
     /// <c>year_id</c> is optional; omitted, it resolves to the committee's
     /// active year, so a scheduled agent needs no per-season config change.
     /// </summary>
-    private static async Task<IResult> HandlePdfAsync(Guid? year_id, UtsavDbContext db, CancellationToken ct)
+    private static async Task<IResult> HandlePdfAsync(
+        Guid? year_id, UtsavDbContext db, Utsav.Infrastructure.Storage.IBlobStorageService storage, CancellationToken ct)
     {
         var yearId = year_id ?? (await ModuleEndpoints.QueryAsync(db,
                 "SELECT TOP 1 id FROM puja_years WHERE org_id=@org AND is_active=1 ORDER BY year DESC",
@@ -68,7 +69,8 @@ public static class AuditReportEndpoint
         var report = await BuildAsync(yearId.Value, db, ct);
         if (report is null) return Results.NotFound(new { error = "Puja year not found" });
 
-        var bytes = Reports.AuditReportPdf.Render(report);
+        var letterhead = await Reports.ReportLetterhead.LoadAsync(db, storage, ct);
+        var bytes = Reports.AuditReportPdf.Render(report, letterhead);
         return Results.File(bytes, "application/pdf", $"audit-{report.Year}.pdf");
     }
 

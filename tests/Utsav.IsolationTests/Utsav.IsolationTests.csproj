@@ -19,6 +19,11 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- One decodable-PNG builder, shared with the unit tests rather than copied. -->
+  <ItemGroup>
+    <Compile Include="..\Utsav.UnitTests\Reports\TestImages.cs" Link="Support\TestImages.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Utsav.Domain\Utsav.Domain.csproj" />
     <ProjectReference Include="..\..\src\Utsav.Infrastructure\Utsav.Infrastructure.csproj" />

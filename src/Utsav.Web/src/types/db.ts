@@ -209,7 +209,8 @@ export interface Organization {
   id: string;
   name: string;
   slug: string;
-  /** Committee logo (a tenant-prefixed blob URL), or null to fall back to an initial. */
+  city: string | null;
+  /** Public URL of the committee's logo, or null to fall back to an initial. */
   logo_url: string | null;
   /** Brand colour as a #rgb / #rrggbb hex literal, or null for the default theme. */
   accent_colour: string | null;

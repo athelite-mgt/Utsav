@@ -129,6 +129,8 @@ internal static class AsuraEndpoints
         ExportRequest body,
         ReadOnlyQueryExecutor executor,
         ITenantContext tenant,
+        Utsav.Infrastructure.Data.UtsavDbContext db,
+        Utsav.Infrastructure.Storage.IBlobStorageService storage,
         CancellationToken ct)
     {
         if (!ToolCatalogue.TryGet(body.ToolId, out var tool))
@@ -169,11 +171,12 @@ internal static class AsuraEndpoints
         {
             var result = await executor.ExecuteAsync(tool.Sql, tenant.TenantId, bound, ct);
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmm");
+            var letterhead = await Utsav.Api.Reports.ReportLetterhead.LoadAsync(db, storage, ct);
 
             return format == "pdf"
-                ? Results.File(AsuraExport.Pdf(tool, result, body.Question),
+                ? Results.File(AsuraExport.Pdf(tool, result, body.Question, letterhead),
                     "application/pdf", $"{tool.Id}-{stamp}.pdf")
-                : Results.File(AsuraExport.Excel(tool, result, body.Question),
+                : Results.File(AsuraExport.Excel(tool, result, body.Question, letterhead),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     $"{tool.Id}-{stamp}.xlsx");
         }

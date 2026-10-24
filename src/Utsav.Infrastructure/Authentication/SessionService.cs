@@ -91,12 +91,12 @@ public sealed class SessionService(UtsavDbContext db)
             join o in db.Organizations on m.OrgId equals o.Id
             where m.UserId == row.User.Id && o.IsActive
             orderby o.Name
-            select new { o.Id, o.Name, o.Slug, o.LogoBlob, o.AccentColour, m.Role, m.Status }
+            select new { o.Id, o.Name, o.Slug, o.City, o.LogoBlob, o.AccentColour, m.Role, m.Status }
         ).ToListAsync(ct);
 
         var memberships = membershipRows
             .Select(m => new SessionMembership(
-                m.Id, m.Name, m.Slug, BrandingUrls.LogoUrl(m.Id, m.LogoBlob), m.AccentColour, m.Role, m.Status))
+                m.Id, m.Name, m.Slug, m.City, BrandingUrls.LogoUrl(m.Id, m.LogoBlob), m.AccentColour, m.Role, m.Status))
             .ToList();
 
         if (row.OrgId is null)
@@ -115,7 +115,7 @@ public sealed class SessionService(UtsavDbContext db)
             return new SessionPayload(user, null, null, current?.Status ?? BestStatus(memberships), memberships, row.User.IsPlatformAdmin);
         }
 
-        var org = new SessionOrganization(current.OrgId, current.Name, current.Slug, current.LogoUrl, current.AccentColour);
+        var org = new SessionOrganization(current.OrgId, current.Name, current.Slug, current.City, current.LogoUrl, current.AccentColour);
         return new SessionPayload(user, org, current.Role, "active", memberships, row.User.IsPlatformAdmin);
     }
 
