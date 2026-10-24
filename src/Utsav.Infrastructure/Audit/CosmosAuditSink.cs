@@ -8,9 +8,8 @@ namespace Utsav.Infrastructure.Audit;
 /// request thread; <see cref="QueuedAuditSink"/> is what request threads
 /// depend on, and <see cref="AuditQueueProcessor"/> is what actually calls
 /// this. Database/container names are config (<c>Cosmos:Database</c> /
-/// <c>Cosmos:Container</c>), not hardcoded — TASKLIST B3 named them
-/// <c>REDACTED-DB</c> / <c>audit-events</c> but said explicitly they might
-/// get renamed in the portal later.
+/// <c>Cosmos:Container</c>), not hardcoded, so they can be renamed in the
+/// portal without a code change.
 /// </summary>
 public sealed class CosmosAuditSink
 {
@@ -35,7 +34,7 @@ public sealed class CosmosAuditSink
     /// side: a fresh deployment for another committee gets its Cosmos
     /// database/container the same way it gets its SQL schema — no manual
     /// portal step — and it's a no-op against one that already exists. The
-    /// live <c>REDACTED-AUDIT-ACCOUNT</c> account is serverless (confirmed: asking it
+    /// audit account is expected to be serverless (asking a serverless account
     /// for RU/s throughput returns "Reading or replacing offers is not
     /// supported for serverless accounts"), so this never provisions
     /// dedicated throughput — doing so on a serverless account would fail

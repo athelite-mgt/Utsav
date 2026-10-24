@@ -280,7 +280,7 @@ volumes:
 ```bash
 cd /home/atip/sourceCode/Utsav
 grep -rn --include='*.json' --include='*.cs' --include='*.yml' \
-  'REDACTED-ID\|REDACTED-ID\|REDACTED-AUDIT-ACCOUNT\|REDACTED-DB\|REDACTED-HOST\|database.windows.net' . | grep -v bin/ | grep -v obj/
+  '<old deployment identifiers: tenant/client GUIDs, audit account, hostname, SQL server>' . | grep -v bin/ | grep -v obj/
 ```
 
 Expected: no output. Any hit is a value belonging to the existing deployment and must be removed.
