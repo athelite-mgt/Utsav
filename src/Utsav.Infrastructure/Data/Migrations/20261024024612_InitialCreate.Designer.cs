@@ -12,8 +12,8 @@ using Utsav.Infrastructure.Data;
 namespace Utsav.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(UtsavDbContext))]
-    [Migration("20260926134342_AddApiKeys")]
-    partial class AddApiKeys
+    [Migration("20261024024612_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -999,6 +999,268 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.ToTable("expenses", (string)null);
                 });
 
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.Feast", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<string>("BillNo")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("bill_no");
+
+                    b.Property<decimal?>("Billed")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("billed");
+
+                    b.Property<string>("BilledOn")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("billed_on");
+
+                    b.Property<decimal?>("Collected")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("collected");
+
+                    b.Property<string>("CollectedOn")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("collected_on");
+
+                    b.Property<Guid?>("CollectorId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("collector_id");
+
+                    b.Property<string>("Comments")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("comments");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<Guid>("DonorId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("donor_id");
+
+                    b.Property<decimal?>("Due")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasColumnName("due")
+                        .HasComputedColumnSql("(COALESCE([billed], 0) - COALESCE([collected], 0))", true);
+
+                    b.Property<string>("Mode")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("mode");
+
+                    b.Property<bool>("NotEligible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("not_eligible");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<Guid>("YearId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("year_id");
+
+                    b.HasKey("Id")
+                        .HasName("feasts_pkey");
+
+                    b.HasIndex("CollectorId");
+
+                    b.HasIndex("OrgId", "YearId");
+
+                    b.HasIndex(new[] { "DonorId", "YearId" }, "feasts_donor_id_year_id_key")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "OrgId" }, "idx_feast_org");
+
+                    b.HasIndex(new[] { "YearId" }, "idx_feast_year");
+
+                    b.ToTable("feasts", (string)null);
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.FeastExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("BillNo")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("bill_no");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("comment");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("details");
+
+                    b.Property<string>("Mode")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("mode");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("SpentOn")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("spent_on");
+
+                    b.Property<Guid?>("VendorId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("vendor_id");
+
+                    b.Property<Guid>("YearId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("year_id");
+
+                    b.HasKey("Id")
+                        .HasName("feast_expenses_pkey");
+
+                    b.HasIndex("VendorId");
+
+                    b.HasIndex("OrgId", "YearId", "Category");
+
+                    b.HasIndex(new[] { "OrgId" }, "idx_feast_expenses_org");
+
+                    b.HasIndex(new[] { "YearId" }, "idx_feast_expenses_year");
+
+                    b.ToTable("feast_expenses", (string)null);
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.FeastToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<DateTime?>("AssignedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<Guid?>("FeastId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("feast_id");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateTime?>("RedeemedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("redeemed_at");
+
+                    b.Property<string>("RedeemedByName")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("redeemed_by_name");
+
+                    b.Property<Guid?>("RedeemedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("redeemed_by_user_id");
+
+                    b.Property<int>("SeqNo")
+                        .HasColumnType("int")
+                        .HasColumnName("seq_no");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)")
+                        .HasDefaultValue("unassigned")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("YearId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("year_id");
+
+                    b.HasKey("Id")
+                        .HasName("feast_tokens_pkey");
+
+                    b.HasIndex("RedeemedByUserId");
+
+                    b.HasIndex("OrgId", "YearId");
+
+                    b.HasIndex(new[] { "Code" }, "feast_tokens_code_key")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "FeastId" }, "idx_feast_tokens_feast");
+
+                    b.HasIndex(new[] { "OrgId" }, "idx_feast_tokens_org");
+
+                    b.HasIndex(new[] { "Status" }, "idx_feast_tokens_status");
+
+                    b.HasIndex(new[] { "YearId" }, "idx_feast_tokens_year");
+
+                    b.ToTable("feast_tokens", (string)null);
+                });
+
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.FundTransfer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1873,6 +2135,12 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(256)")
                         .HasColumnName("mode");
 
+                    b.Property<bool>("NotEligible")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false)
+                        .HasColumnName("not_eligible");
+
                     b.Property<Guid?>("OrgId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("org_id");
@@ -2294,6 +2562,69 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.HasIndex(new[] { "OrgId" }, "idx_vendors_org");
 
                     b.ToTable("vendors", (string)null);
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.VendorIssue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("NEWSEQUENTIALID()");
+
+                    b.Property<Guid?>("ContractId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("contract_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("IssueType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("issue_type");
+
+                    b.Property<string>("OccurredOn")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("occurred_on");
+
+                    b.Property<Guid?>("OrgId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("org_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'open'");
+
+                    b.Property<Guid>("VendorId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("vendor_id");
+
+                    b.HasKey("Id")
+                        .HasName("vendor_issues_pkey");
+
+                    b.HasIndex("OrgId");
+
+                    b.HasIndex(new[] { "ContractId" }, "idx_vendor_issues_contract");
+
+                    b.HasIndex(new[] { "VendorId" }, "idx_vendor_issues_vendor");
+
+                    b.ToTable("vendor_issues", (string)null);
                 });
 
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.WorkflowItem", b =>
@@ -2801,6 +3132,105 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Navigation("Year");
                 });
 
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.Feast", b =>
+                {
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Collector", "Collector")
+                        .WithMany("Feasts")
+                        .HasForeignKey("CollectorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("feasts_collector_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Donor", "Donor")
+                        .WithMany("Feasts")
+                        .HasForeignKey("DonorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("feasts_donor_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
+                        .WithMany("Feasts")
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("feasts_org_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.PujaYear", "Year")
+                        .WithMany("Feasts")
+                        .HasForeignKey("YearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("feasts_year_id_fkey");
+
+                    b.Navigation("Collector");
+
+                    b.Navigation("Donor");
+
+                    b.Navigation("Org");
+
+                    b.Navigation("Year");
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.FeastExpense", b =>
+                {
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
+                        .WithMany("FeastExpenses")
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("feast_expenses_org_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Vendor", "Vendor")
+                        .WithMany("FeastExpenses")
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("feast_expenses_vendor_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.PujaYear", "Year")
+                        .WithMany("FeastExpenses")
+                        .HasForeignKey("YearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("feast_expenses_year_id_fkey");
+
+                    b.Navigation("Org");
+
+                    b.Navigation("Vendor");
+
+                    b.Navigation("Year");
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.FeastToken", b =>
+                {
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Feast", "FeastRecord")
+                        .WithMany("Tokens")
+                        .HasForeignKey("FeastId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("feast_tokens_feast_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
+                        .WithMany("FeastTokens")
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("feast_tokens_org_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RedeemedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("feast_tokens_redeemed_by_user_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.PujaYear", "Year")
+                        .WithMany("FeastTokens")
+                        .HasForeignKey("YearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("feast_tokens_year_id_fkey");
+
+                    b.Navigation("FeastRecord");
+
+                    b.Navigation("Org");
+
+                    b.Navigation("Year");
+                });
+
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.FundTransfer", b =>
                 {
                     b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
@@ -3063,6 +3493,34 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Navigation("Org");
                 });
 
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.VendorIssue", b =>
+                {
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Contract", "Contract")
+                        .WithMany("VendorIssues")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("vendor_issues_contract_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("vendor_issues_org_id_fkey");
+
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Vendor", "Vendor")
+                        .WithMany("VendorIssues")
+                        .HasForeignKey("VendorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("vendor_issues_vendor_id_fkey");
+
+                    b.Navigation("Contract");
+
+                    b.Navigation("Org");
+
+                    b.Navigation("Vendor");
+                });
+
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.WorkflowItem", b =>
                 {
                     b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
@@ -3144,6 +3602,8 @@ namespace Utsav.Infrastructure.Data.Migrations
                 {
                     b.Navigation("Advances");
 
+                    b.Navigation("Feasts");
+
                     b.Navigation("PujaSchedules");
 
                     b.Navigation("Subscriptions");
@@ -3156,16 +3616,25 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Navigation("ContractPayments");
 
                     b.Navigation("Expenses");
+
+                    b.Navigation("VendorIssues");
                 });
 
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.Donor", b =>
                 {
+                    b.Navigation("Feasts");
+
                     b.Navigation("Subscriptions");
                 });
 
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.Expense", b =>
                 {
                     b.Navigation("AdvanceSettlements");
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.Feast", b =>
+                {
+                    b.Navigation("Tokens");
                 });
 
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.Organization", b =>
@@ -3193,6 +3662,12 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Navigation("Donors");
 
                     b.Navigation("Expenses");
+
+                    b.Navigation("FeastExpenses");
+
+                    b.Navigation("FeastTokens");
+
+                    b.Navigation("Feasts");
 
                     b.Navigation("FundTransfers");
 
@@ -3239,6 +3714,12 @@ namespace Utsav.Infrastructure.Data.Migrations
 
                     b.Navigation("Expenses");
 
+                    b.Navigation("FeastExpenses");
+
+                    b.Navigation("FeastTokens");
+
+                    b.Navigation("Feasts");
+
                     b.Navigation("FundTransfers");
 
                     b.Navigation("Offerings");
@@ -3272,6 +3753,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Navigation("Contracts");
 
                     b.Navigation("Expenses");
+
+                    b.Navigation("FeastExpenses");
+
+                    b.Navigation("VendorIssues");
                 });
 
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.WorkflowItem", b =>
