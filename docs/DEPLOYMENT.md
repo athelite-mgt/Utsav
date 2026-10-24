@@ -71,6 +71,22 @@ workflow:
 ConnectionStrings__AzureSql = @Microsoft.KeyVault(VaultName=Utsav;SecretName=<secret name>)
 ```
 
+Current vault contents and where each belongs:
+
+| Key Vault secret | App Service setting | Notes |
+|---|---|---|
+| `ConnectionStringSQL` | `ConnectionStrings__AzureSql` | Must connect as **`utsav_app`**, not the deploy/admin login. |
+| `GoogleClientId` | `Google__ClientId` | Server-side ID-token audience check. Also set as the repo variable `UTSAV_GOOGLE_CLIENT_ID` for the browser bundle (a client ID is public). |
+| `GoogleClientSecret` | *(none)* | Not used by this app (ID-token flow). Do not map it; delete it from the vault if you prefer. |
+| `ConnectionStringAD` | *(to be confirmed)* | The app has no setting that takes a connection string for Entra. Microsoft sign-in uses only a client ID and tenant ID, and is switched off for now. |
+| *(to add)* Cosmos endpoint + key | `Cosmos__Endpoint`, `Cosmos__Key` | Required; the app will not start without them. |
+
+```bash
+az webapp config appsettings set -g <resource-group> -n utsav-dyeedqdbhpazg8es --settings \
+  "ConnectionStrings__AzureSql=@Microsoft.KeyVault(VaultName=Utsav;SecretName=ConnectionStringSQL)" \
+  "Google__ClientId=@Microsoft.KeyVault(VaultName=Utsav;SecretName=GoogleClientId)"
+```
+
 This needs the App Service's managed identity (Identity → System assigned: On)
 to hold **Key Vault Secrets User** on the vault. A setting whose reference does
 not resolve shows a red status in the portal's configuration blade.
