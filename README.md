@@ -8,11 +8,15 @@ for the design and `docs/superpowers/plans/` for the implementation plan.
 
 ## Local development
 
-    export MSSQL_SA_PASSWORD='<choose a strong password>'
-    docker compose -f docker-compose.dev.yml up -d   # SQL Server 2022
+The local SQL Server password lives in a git-ignored `.env` at the repo root
+(`MSSQL_SA_PASSWORD=...`). Load it into your shell, then:
+
+    set -a; . ./.env; set +a
+    export ConnectionStrings__AzureSql="Server=localhost,1433;Database=utsav_dev;User Id=sa;Password=$MSSQL_SA_PASSWORD;TrustServerCertificate=True"
+    docker compose -f docker-compose.dev.yml up -d --wait   # SQL Server 2022
     dotnet ef database update -p src/Utsav.Infrastructure -s src/Utsav.Api
-    dotnet run --project src/Utsav.Api
-    cd src/Utsav.Web && npm install && npm run dev
+    ASPNETCORE_URLS=http://localhost:5174 dotnet run --project src/Utsav.Api
+    cd src/Utsav.Web && npm install && npm run dev           # Vite on :5173, proxies /api to :5174
 
 ## Tests
 
