@@ -70,9 +70,9 @@ jobs:
     needs: build-and-test
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://utsav.athelitesm.com
+    # No `environment:` here on purpose: it changes the OIDC subject claim to
+    # "...:environment:production", which the Azure federated credential (created for
+    # branch main by the Deployment Center) does not trust, and the login is refused.
     permissions:
       id-token: write # lets azure/login exchange the run's OIDC token for an Azure token
       contents: read
