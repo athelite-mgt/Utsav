@@ -186,6 +186,37 @@ var staticFileOptions = new StaticFileOptions
 app.UseDefaultFiles();
 app.UseStaticFiles(staticFileOptions);
 
+// Schema first, so everything below (and the first request) finds its tables.
+// Opt-in: Database:MigrateOnStartup=true, using ConnectionStrings:AzureSqlMigrations
+// (a login that may change the schema) when present, else the main connection.
+// A failure here stops the app from starting: serving against a half-migrated
+// schema is worse than not serving. Locally, `dotnet ef database update` still works.
+if (builder.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+{
+    var migrationsConnection = builder.Configuration.GetConnectionString("AzureSqlMigrations")
+        ?? builder.Configuration.GetConnectionString("AzureSql")!;
+    await DatabaseMigrator.MigrateAsync(migrationsConnection, app.Logger);
+}
+
+// The invariant the isolation model leans on: the login serving requests must not be able to
+// switch row-level security off. Loud, not fatal - a wrong login should be fixed, not cause an outage.
+try
+{
+    var runtime = await DatabaseMigrator.InspectRuntimePrivilegesAsync(builder.Configuration.GetConnectionString("AzureSql")!);
+    if (runtime.IsPrivileged)
+    {
+        app.Logger.LogError(
+            "The application's database login can change the schema (db_owner: {IsDbOwner}, ALTER ANY SECURITY POLICY: {CanAlter}). " +
+            "Row-level security is NOT a real backstop until ConnectionStrings:AzureSql uses the least-privilege login (member of utsav_app_role only). " +
+            "Give schema changes their own login via ConnectionStrings:AzureSqlMigrations.",
+            runtime.IsDbOwner, runtime.CanAlterSecurityPolicy);
+    }
+}
+catch (Exception ex)
+{
+    app.Logger.LogWarning(ex, "Could not inspect the database login's privileges.");
+}
+
 // Deliberately no committee bootstrap. A pooled multi-tenant platform must not
 // conjure a tenant at startup: committees are provisioned explicitly by a
 // platform administrator (see the platform endpoints).

@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label";
 import { AppLogoTile, PoweredByAthelite } from "@/components/brand/Athelite";
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import { MicrosoftSignInButton } from "@/components/auth/MicrosoftSignInButton";
+import { useAuthConfig } from "@/lib/authConfig";
 import { InstallPrompt } from "@/components/common/InstallPrompt";
 
-const googleEnabled = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
 /** Staggered entrance — each block lands just after the one above it. */
 const rise = (delayMs: number): CSSProperties => ({ animationDelay: `${delayMs}ms` });
@@ -19,6 +19,9 @@ const rise = (delayMs: number): CSSProperties => ({ animationDelay: `${delayMs}m
 type Mode = "in" | "up";
 
 export function Login() {
+  // Undefined while the server answers, so the sign-in options appear once, already decided.
+  const authConfig = useAuthConfig();
+  const googleEnabled = Boolean(authConfig?.googleClientId);
   const { signIn, signUp } = useAuth();
   const [mode, setMode] = useState<Mode>("in");
   const [email, setEmail] = useState("");
@@ -97,13 +100,17 @@ export function Login() {
 
           {/* Single sign-on. Google first: it is how almost every existing
               member already signs in. */}
-          {(
+          {authConfig && (
             <div className="animate-rise mt-5" style={rise(130)}>
-              {googleEnabled && <GoogleSignInButton onPendingChange={setGoogleBusy} />}
+              {googleEnabled && <GoogleSignInButton clientId={authConfig.googleClientId} onPendingChange={setGoogleBusy} />}
               {/* Always shown: when Entra is not configured the button renders
                   itself disabled, saying so. */}
               <div className={googleEnabled ? "mt-3" : undefined}>
-                <MicrosoftSignInButton onPendingChange={setGoogleBusy} />
+                <MicrosoftSignInButton
+                  clientId={authConfig.entraClientId}
+                  tenantId={authConfig.entraTenantId}
+                  onPendingChange={setGoogleBusy}
+                />
               </div>
               <div className="my-5 flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />

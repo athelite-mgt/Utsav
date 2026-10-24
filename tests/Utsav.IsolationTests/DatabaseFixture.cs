@@ -276,7 +276,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         Encrypt = true,
     }.ConnectionString;
 
-    private string SaConnection(string database) => new SqlConnectionStringBuilder
+    public string SaConnection(string database) => new SqlConnectionStringBuilder
     {
         DataSource = "localhost,1433",
         InitialCatalog = database,

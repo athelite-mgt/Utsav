@@ -11,11 +11,10 @@ on:
 env:
   DOTNET_VERSION: "10.0.x"
   NODE_VERSION: "22.x"
-  # This product is separate from the original single-committee app. The deploy
-  # job refuses to run until UTSAV_DEPLOY_ENABLED is set to "true" as a
-  # repository variable, and it authenticates with its OWN publish profile
-  # (UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE), so it cannot deploy over any other app.
-  AZURE_WEBAPP_NAME: "utsav-dyeedqdbhpazg8es"
+  # This product is separate from the original single-committee app: it deploys to
+  # its own App Service, authenticating with its own federated (OIDC) identity, so
+  # there is no long-lived publish profile to leak.
+  AZURE_WEBAPP_NAME: "Utsav"
 
 jobs:
   # Runs on every push, including branches that never deploy — the point is
@@ -69,11 +68,14 @@ jobs:
 
   deploy:
     needs: build-and-test
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.UTSAV_DEPLOY_ENABLED == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ steps.deploy.outputs.webapp-url }}
+      url: https://utsav.athelitesm.com
+    permissions:
+      id-token: write # lets azure/login exchange the run's OIDC token for an Azure token
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -82,35 +84,32 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       # dotnet publish shells out to npm itself (see the BuildAndCopyFrontend
-      # target in Utsav.Api.csproj) — Node just has to be on PATH for it.
+      # target in Utsav.Api.csproj) — Node just has to be on PATH for it. No
+      # sign-in settings are compiled in: the app serves its identity providers'
+      # public client IDs from its own configuration (/api/auth/config).
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: src/Utsav.Web/package-lock.json
 
-      # One command produces the whole deployable artifact: the API, plus the
-      # built React app copied into wwwroot. Nothing App-Service-specific
-      # about this step — the same command works for any host.
-      # VITE_* values are compiled into the browser bundle, so they must be
-      # non-secret. The Google OAuth client ID is public (it is in every ID token);
-      # keep it as a repository *variable*, not a secret. The Entra values stay
-      # unset until Microsoft sign-in is set up - the button then shows disabled.
       - name: Publish (API + frontend into wwwroot)
         run: dotnet publish src/Utsav.Api --configuration Release --output ./publish
-        env:
-          VITE_GOOGLE_CLIENT_ID: ${{ vars.UTSAV_GOOGLE_CLIENT_ID }}
-          VITE_ENTRA_CLIENT_ID: ${{ vars.UTSAV_ENTRA_CLIENT_ID }}
-          VITE_ENTRA_TENANT_ID: ${{ vars.UTSAV_ENTRA_TENANT_ID }}
 
-      # No database migration step here on purpose. This is a live committee's
-      # finance data — schema changes get applied deliberately, by hand
-      # (`dotnet ef database update`), reviewed before they run, not as a side
-      # effect of a routine deploy. See TASKLIST §2.10 / R4.
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_43FD789961984014BD0A8CF8F069AA55 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_5E226711D74F4F6B919492ABD4D22A5F }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_B0DDFBEE27EB4172992282F6C6742D57 }}
+
+      # The schema is applied by the app itself on startup (Database__MigrateOnStartup),
+      # using its own migration login, so a deploy is just this step. The request-serving
+      # login stays least-privilege. See docs/DEPLOYMENT.md.
       - name: Deploy to Azure App Service
         id: deploy
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE }}
+          slot-name: Production
           package: ./publish

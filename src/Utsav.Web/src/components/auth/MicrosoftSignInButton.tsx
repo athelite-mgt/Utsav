@@ -4,9 +4,6 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 
-const CLIENT_ID = import.meta.env.VITE_ENTRA_CLIENT_ID;
-const TENANT_ID = import.meta.env.VITE_ENTRA_TENANT_ID;
-
 /**
  * The Microsoft logo. Four squares, drawn rather than fetched, so the button
  * doesn't depend on a remote asset loading before it looks right.
@@ -50,7 +47,9 @@ function clearStuckInteractionFlag() {
  * Shown disabled ("Not available right now") until Entra is configured, so
  * people can see the option exists and know it is not a fault.
  */
-export function MicrosoftSignInButton({ onPendingChange }: { onPendingChange?: (v: boolean) => void }) {
+export function MicrosoftSignInButton({ clientId, tenantId, onPendingChange }: { clientId: string | null; tenantId: string | null; onPendingChange?: (v: boolean) => void }) {
+  const CLIENT_ID = clientId;
+  const TENANT_ID = tenantId;
   const { signInWithMicrosoft } = useAuth();
   const [pending, setPending] = useState(false);
   // Held across clicks so a second press reuses the initialised instance
@@ -75,7 +74,7 @@ export function MicrosoftSignInButton({ onPendingChange }: { onPendingChange?: (
   }, []);
 
   // Not set up yet: show the option, greyed out and honest about why, rather
-  // than hiding it. Once the VITE_ENTRA_* values exist this becomes the live
+  // than hiding it. Once Entra is configured on the server this becomes the live
   // button with no other change.
   if (!CLIENT_ID || !TENANT_ID) {
     return (

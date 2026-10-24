@@ -22,16 +22,15 @@ declare global {
   }
 }
 
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
 /**
  * Renders nothing if no Client ID is configured — Google sign-in is opt-in
- * per deployment (see .env.example), never a hard requirement to run the app.
+ * per deployment (served by /api/auth/config), never a hard requirement to run the app.
  *
  * `onPendingChange` lets the host page grey out the rest of its form while
  * the exchange is in flight.
  */
-export function GoogleSignInButton({ onPendingChange }: { onPendingChange?: (v: boolean) => void }) {
+export function GoogleSignInButton({ clientId, onPendingChange }: { clientId: string | null; onPendingChange?: (v: boolean) => void }) {
+  const CLIENT_ID = clientId;
   const { signInWithGoogle } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const [pending, setPending] = useState(false);

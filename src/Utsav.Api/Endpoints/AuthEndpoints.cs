@@ -23,6 +23,15 @@ public static class AuthEndpoints
         group.MapPost("/google", GoogleAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
         group.MapPost("/entra", EntraAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
 
+        // The sign-in page needs the providers' client IDs before anyone is signed in. They are public
+        // by nature; nothing else from configuration may ever be added here.
+        group.MapGet("/config", (IConfiguration configuration) => Results.Ok(new
+        {
+            google_client_id = NullIfBlank(configuration["Google:ClientId"]),
+            entra_client_id = NullIfBlank(configuration["AzureAd:ClientId"]),
+            entra_tenant_id = NullIfBlank(configuration["AzureAd:TenantId"]),
+        })).AllowAnonymous();
+
         // Authenticated, but membership status doesn't matter here — a
         // pending/denied user still needs /me to find that out.
         group.MapGet("/me", MeAsync).RequireAuthorization();
@@ -38,6 +47,8 @@ public static class AuthEndpoints
 
         return app;
     }
+
+    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static async Task<IResult> LoginAsync(
         [FromBody] LoginRequest? request, HttpContext http, UtsavDbContext db, SessionService sessions, CancellationToken ct)

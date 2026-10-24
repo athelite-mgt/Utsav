@@ -6,7 +6,7 @@ SQL, with Cosmos DB (audit trail) and Blob Storage (documents, committee logos).
 
 > **This product is separate from the original single-committee app.** It must
 > get its own App Service, database, Cosmos account, storage account, OAuth
-> clients and publish profile. Do not point any setting below at the original
+> clients and deployment identity. Do not point any setting below at the original
 > app's resources.
 
 ## Environment
@@ -14,7 +14,7 @@ SQL, with Cosmos DB (audit trail) and Blob Storage (documents, committee logos).
 | Item | Value |
 |---|---|
 | Repository | https://github.com/athelite-mgt/Utsav |
-| App Service | `utsav-dyeedqdbhpazg8es` (Central India) |
+| App Service | `Utsav` (Central India; default host `utsav-dyeedqdbhpazg8es.centralindia-01.azurewebsites.net`) |
 | Public host | `https://utsav.athelitesm.com` |
 | Key Vault | `Utsav` |
 
@@ -53,6 +53,8 @@ sqlcmd -S <server> -U <deploy login> -d <db>     -v APP_PASSWORD="<new password>
 | Setting | Purpose |
 |---|---|
 | `ConnectionStrings__AzureSql` | Connection string for **`utsav_app`**. The running app never receives the deploy login. |
+| `Database__MigrateOnStartup` | Set to `true`. The app applies pending EF Core migrations itself on startup (safe to repeat, safe when several instances start together) and refuses to start if one fails. |
+| `ConnectionStrings__AzureSqlMigrations` | Login allowed to change the schema (database owner), used **only** for that startup step. Optional: when absent, `ConnectionStrings__AzureSql` is used, which is only acceptable for the very first start (see section 6). |
 | `Platform__BootstrapAdminEmail` | Email of an *existing* account to promote to platform operator. Inert once any operator exists. |
 | `AzureAd__TenantId`, `AzureAd__ClientId` | New Entra app registration for this hostname. |
 | `Google__ClientId` | New Google OAuth client for this hostname. |
@@ -76,15 +78,24 @@ Current vault contents and where each belongs:
 | Key Vault secret | App Service setting | Notes |
 |---|---|---|
 | `ConnectionStringSQL` | `ConnectionStrings__AzureSql` | Must connect as **`utsav_app`**, not the deploy/admin login. |
-| `GoogleClientId` | `Google__ClientId` | Server-side ID-token audience check. Also set as the repo variable `UTSAV_GOOGLE_CLIENT_ID` for the browser bundle (a client ID is public). |
+| `GoogleClientId` | `Google__ClientId` | Server-side ID-token audience check. The browser gets it from the app itself (`GET /api/auth/config`), so nothing is compiled into the build. |
 | `GoogleClientSecret` | *(none)* | Not used by this app (ID-token flow). Do not map it; delete it from the vault if you prefer. |
 | `ConnectionStringAD` | *(to be confirmed)* | The app has no setting that takes a connection string for Entra. Microsoft sign-in uses only a client ID and tenant ID, and is switched off for now. |
-| *(to add)* Cosmos endpoint + key | `Cosmos__Endpoint`, `Cosmos__Key` | Required; the app will not start without them. |
+| `CosmosURI` | `Cosmos__Endpoint` | Required; the app will not start without it. |
+| `CosmosKey` | `Cosmos__Key` | Required. |
+| `StorageConnectionString` | `Storage__ConnectionString` | Documents and committee logos. |
+| `StorageContainerNameProd` | `Storage__ContainerName` | Private container. |
 
 ```bash
 az webapp config appsettings set -g <resource-group> -n utsav-dyeedqdbhpazg8es --settings \
   "ConnectionStrings__AzureSql=@Microsoft.KeyVault(VaultName=Utsav;SecretName=ConnectionStringSQL)" \
-  "Google__ClientId=@Microsoft.KeyVault(VaultName=Utsav;SecretName=GoogleClientId)"
+  "Google__ClientId=@Microsoft.KeyVault(VaultName=Utsav;SecretName=GoogleClientId)" \
+  "Cosmos__Endpoint=@Microsoft.KeyVault(VaultName=Utsav;SecretName=CosmosURI)" \
+  "Cosmos__Key=@Microsoft.KeyVault(VaultName=Utsav;SecretName=CosmosKey)" \
+  "Storage__ConnectionString=@Microsoft.KeyVault(VaultName=Utsav;SecretName=StorageConnectionString)" \
+  "Storage__ContainerName=@Microsoft.KeyVault(VaultName=Utsav;SecretName=StorageContainerNameProd)" \
+  "Database__MigrateOnStartup=true" \
+  "Platform__BootstrapAdminEmail=<your email>"
 ```
 
 This needs the App Service's managed identity (Identity → System assigned: On)
@@ -99,57 +110,60 @@ code-level workaround:
 - Google OAuth client → **Authorised JavaScript origins**: `https://utsav.athelitesm.com` (the app uses Google Identity Services, which checks the *origin*; the `redirect_uris` entry alone is not enough). Add `http://localhost:5173` too if sign-in should work in local development.
 - Entra app registration → Redirect URI (SPA): `https://utsav.athelitesm.com`
 
-**Microsoft sign-in is not set up yet.** Until `VITE_ENTRA_CLIENT_ID` and `VITE_ENTRA_TENANT_ID` are provided, the login page shows the Microsoft button greyed out with "Not available right now". Setting the two repository variables below and redeploying enables it with no code change.
+**Microsoft sign-in is not set up yet.** Until `AzureAd__ClientId` and `AzureAd__TenantId` are set, the login page shows the Microsoft button greyed out with "Not available right now". Setting `AzureAd__ClientId` and `AzureAd__TenantId` on the App Service enables it with no code change or rebuild.
 
 ## 5. GitHub Actions
 
-`.github/workflows/deploy.yml` builds with warnings as errors, runs the unit
-tests, starts SQL Server in a container and runs the cross-tenant isolation
-suite (a failure there is a data leak and blocks the deploy), then type-checks
-the frontend. The deploy job is gated so nothing deploys by accident:
+`.github/workflows/deploy.yml` is the single pipeline. On every push to `main` it
+builds with warnings as errors, runs the unit tests, starts SQL Server in a
+container and runs the cross-tenant isolation suite (a failure there is a data
+leak and blocks the deploy), type-checks the frontend, and then deploys the
+published API + frontend to the `Utsav` App Service.
 
-1. Create the new App Service and download its publish profile.
-2. Store it as the repository secret `UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE`.
-3. `AZURE_WEBAPP_NAME` in the workflow is already `utsav-dyeedqdbhpazg8es`.
-4. Set the repository variable `UTSAV_DEPLOY_ENABLED` to `true`.
-5. Set the repository variable `UTSAV_GOOGLE_CLIENT_ID` (the OAuth client ID, which
-   is public). Later, `UTSAV_ENTRA_CLIENT_ID` and `UTSAV_ENTRA_TENANT_ID`.
-   These are compiled into the browser bundle at publish time, so changing one
-   needs a redeploy. Never put the Google *client secret* here: this app does not
-   use it.
+Authentication is OIDC (`azure/login`): the three repository secrets
+`AZUREAPPSERVICE_CLIENTID_…`, `…TENANTID_…` and `…SUBSCRIPTIONID_…` were created
+by the App Service Deployment Center. There is no publish profile and no other
+repository variable to set. (The Deployment Center's own generated workflow was
+removed so two pipelines do not race; if it is ever regenerated, delete it again.)
 
-Migrations are deliberately **not** part of the deploy: schema changes are
-reviewed and applied by hand (section 6).
+Migrations are applied by the app on startup, not by the pipeline, so the pipeline
+never holds database credentials.
 
 ## 6. First run
 
-1. Apply migrations as the deploy login:
+The schema is applied automatically, but the database needs its two logins set up
+once, in this order:
 
-   ```bash
-   export ConnectionStrings__AzureSql="Server=<server>.database.windows.net;Database=<db>;User Id=<deploy login>;Password=<...>"
-   dotnet ef database update -p src/Utsav.Infrastructure -s src/Utsav.Api
-   ```
-
-2. Create `utsav_app` with `scripts/sql/create-app-principal.sql` (section 2).
-3. Deploy / start the app. **No committee exists** — deliberate; a pooled
-   platform must not conjure a tenant.
-4. Sign up with the address in `Platform__BootstrapAdminEmail`, then restart the
-   app so the promotion applies. A **Platform** section appears in the sidebar.
+1. **First deploy.** Set `Database__MigrateOnStartup=true` and point
+   `ConnectionStrings__AzureSql` at a login that owns the database (temporarily).
+   Push to `main`. The app starts, applies every migration (creating the tables, the
+   row-level-security policy and the `utsav_app_role` role) and logs
+   "Database migrations applied". It will also log an **error** that the runtime
+   login is privileged; that is expected for this one start.
+2. **Create the least-privilege login** with `scripts/sql/create-app-principal.sql`
+   (section 2).
+3. **Switch the logins.** Point `ConnectionStrings__AzureSql` at `utsav_app`, and add
+   `ConnectionStrings__AzureSqlMigrations` with the owner login. Restart the app.
+   The privilege error no longer appears; if it ever does, the app is serving
+   requests with a login that could switch tenant isolation off.
+4. **No committee exists yet** — deliberate; a pooled platform must not conjure a
+   tenant. Sign up with the address in `Platform__BootstrapAdminEmail`, then restart
+   so the promotion applies. A **Platform** section appears in the sidebar.
 5. In the Platform console, create the first committee: name, festival
-   (`durga` or `kali`), city, first year and the first admin's email. The
-   console shows a **one-time invite code** (also returned by
+   (`durga` or `kali`), city, first year and the first admin's email. The console
+   shows a **one-time invite code** (also returned by
    `POST /api/platform/committees` as `invite_code`).
 6. Give the code to the first admin through a channel you trust. They sign up
-   (or sign in), and enter it under **Have an invite code?**. The code is
-   bound to their email, expires after 14 days and works once; the database holds
-   only its hash.
+   (or sign in) and enter it under **Have an invite code?**. The code is bound to
+   their email, expires after 14 days and works once; the database holds only its hash.
 7. The admin then invites the rest of the committee and sets branding
    (Settings → Committee: name, logo, accent colour), which flows into the
    committee's PDF and Excel letterhead.
 
-Lost code: re-issue it from the Platform console. This works **only while the
-committee has no active members**, so an operator can never mint access to a
-committee that already has people in it.
+Later releases need nothing beyond pushing to `main`: new migrations run on the
+next start. Lost invite code: re-issue it from the Platform console. This works
+**only while the committee has no active members**, so an operator can never mint
+access to a committee that already has people in it.
 
 ## 7. Sessions and API clients
 
