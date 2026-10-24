@@ -167,6 +167,23 @@ catch (Exception ex)
         "Document uploads will fail until this is fixed.");
 }
 
+// EF wraps anything thrown while it evaluates a query's parameters (which is
+// where db.TenantId is read inside a LINQ filter) in an InvalidOperationException,
+// so the tenancy failure has to be found anywhere in the exception chain, not
+// only at the top.
+static Exception? FindTenancyFailure(Exception? exception)
+{
+    for (var depth = 0; exception is not null && depth < 8; depth++, exception = exception.InnerException)
+    {
+        if (exception is TenantNotResolvedException or TenancyViolationException)
+        {
+            return exception;
+        }
+    }
+
+    return null;
+}
+
 // A request that reaches data access without a committee is refused, not
 // served from an arbitrary tenant. 403 rather than 401: the caller is
 // authenticated, they simply have not selected a committee they belong to.
@@ -178,7 +195,7 @@ app.Use(async (context, next) =>
     {
         await next();
     }
-    catch (Exception e) when (e is TenantNotResolvedException or TenancyViolationException)
+    catch (Exception e) when (FindTenancyFailure(e) is not null)
     {
         if (context.Response.HasStarted)
         {
@@ -188,13 +205,18 @@ app.Use(async (context, next) =>
         // A violation is a programming error (a statement the executor could
         // not prove tenant-safe). It fails closed with the same 403, but it
         // must be loud in the logs.
-        if (e is TenancyViolationException)
+        if (FindTenancyFailure(e) is TenancyViolationException)
         {
             app.Logger.LogError(e, "Refused an unscoped statement on {Path}", context.Request.Path);
         }
 
         context.Response.StatusCode = StatusCodes.Status403Forbidden;
         await context.Response.WriteAsJsonAsync(new { error = "No committee selected" });
+    }
+    catch (ForeignReferenceException e) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+        await context.Response.WriteAsJsonAsync(new { error = e.Message });
     }
 });
 

@@ -254,7 +254,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
             identity.OrgMembers.AddRange(
                 new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserInBoth, Role = "admin", Status = "active" },
                 new OrgMember { Id = Guid.NewGuid(), OrgId = TenantB, UserId = UserInBoth, Role = "admin", Status = "active" },
-                new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserInAOnly, Role = "finance", Status = "active" });
+                new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserInAOnly, Role = "finance", Status = "active" },
+                // A pending request at A only, so the access-request list has
+                // something to leak into B.
+                new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserOutsider, Role = "viewer", Status = "pending" });
 
             identity.Sessions.AddRange(
                 new Session { Token = TokenForA, UserId = UserInBoth, OrgId = TenantA },
@@ -333,6 +336,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
         db.WorkflowItems.Add(new WorkflowItem
         {
             Id = workflow, OrgId = tenant, YearId = year, Title = $"Task {marker}", Status = "todo", Notes = $"workflow {marker}",
+        });
+        db.ApiKeys.Add(new ApiKey
+        {
+            Id = Guid.NewGuid(), OrgId = tenant, Name = $"key {marker}", KeyHash = $"hash-{marker}", Prefix = $"utsav_sk_{marker}",
         });
         db.Documents.Add(new Document
         {

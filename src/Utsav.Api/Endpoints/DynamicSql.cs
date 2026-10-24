@@ -88,6 +88,8 @@ internal static class DynamicSql
 
         var (verb, table) = ParseVerbAndTable(sql);
 
+        await EnsureReferencesInCommitteeAsync(db, verb, parameterList, ct);
+
         // Must run before the mutation — it's the only chance to see what the
         // row(s) looked like beforehand. Best-effort: a diagnostic snapshot
         // must never be why a real save fails.
@@ -119,6 +121,53 @@ internal static class DynamicSql
         }
     }
 #pragma warning restore EF1002
+
+    /// <summary>
+    /// A write may only point at records in its own committee. The existence
+    /// check runs through the read chokepoint, so it is tenant-bound and sees
+    /// rows written earlier in the same transaction (a year rollover creates
+    /// the year and then files budget lines under it).
+    /// </summary>
+    private static async Task EnsureReferencesInCommitteeAsync(
+        UtsavDbContext db, string? verb, IReadOnlyCollection<object> parameters, CancellationToken ct)
+    {
+        if (verb is not ("INSERT INTO" or "UPDATE"))
+        {
+            return;
+        }
+
+        foreach (var parameter in parameters.OfType<SqlParameter>())
+        {
+            if (ReferenceGuard.TableFor(parameter.ParameterName) is not { } table)
+            {
+                continue;
+            }
+
+            // Ids off a JSON request body arrive as strings, so a Guid-typed
+            // check alone would silently skip every one of them. A value that
+            // is not a Guid at all (an int year number bound to @year, or
+            // junk) is left to the database to accept or reject.
+            var referenced = parameter.Value switch
+            {
+                Guid g => g,
+                string text when Guid.TryParse(text, out var parsed) => parsed,
+                _ => Guid.Empty,
+            };
+            if (referenced == Guid.Empty)
+            {
+                continue;
+            }
+
+            var found = await ModuleEndpoints.QueryAsync(
+                db, $"SELECT 1 AS present FROM [{table}] WHERE id=@ref AND org_id=@org",
+                [new SqlParameter("@ref", referenced)], ct);
+
+            if (found.Count == 0)
+            {
+                throw new ForeignReferenceException(parameter.ParameterName.TrimStart('@'));
+            }
+        }
+    }
 
     /// <summary>
     /// Audits one settlement (collection_payments) change. PersistCollectionPaymentsAsync
