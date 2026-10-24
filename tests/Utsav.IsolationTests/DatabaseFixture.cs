@@ -171,6 +171,33 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     public HttpClient AnonymousClient() => _factory!.CreateClient();
 
+    /// <summary>
+    /// A brand-new account with its own memberships and a fresh session token.
+    /// Tests that change a session (switching committee) or a membership use
+    /// one of these, so the shared fixture sessions and members stay put and
+    /// test order cannot matter.
+    /// </summary>
+    public async Task<(Guid UserId, string Token)> NewMemberAsync(
+        string label, (Guid Org, string Role, string Status)[] memberships, Guid? pinnedTo = null)
+    {
+        var userId = Guid.NewGuid();
+        var token = "t" + Guid.NewGuid().ToString("N");
+        await using var identity = ContextWithNoTenant();
+        identity.Users.Add(new User
+        {
+            Id = userId, Email = $"{label}-{userId:N}@test.local", FullName = label, AuthProvider = "local",
+            PasswordHash = "!", Role = "viewer",
+        });
+        foreach (var (org, role, status) in memberships)
+        {
+            identity.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = org, UserId = userId, Role = role, Status = status });
+        }
+
+        identity.Sessions.Add(new Session { Token = token, UserId = userId, OrgId = pinnedTo });
+        await identity.SaveChangesAsync();
+        return (userId, token);
+    }
+
     public IServiceProvider Services => _factory!.Services;
 
     /// <summary>

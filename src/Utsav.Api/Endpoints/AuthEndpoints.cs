@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Utsav.Api.Authentication;
@@ -23,6 +24,13 @@ public static class AuthEndpoints
         // pending/denied user still needs /me to find that out.
         group.MapGet("/me", MeAsync).RequireAuthorization();
         group.MapPost("/logout", LogoutAsync).RequireAuthorization();
+
+        // Both are authenticated but deliberately NOT behind ActiveMember: the
+        // people who need them have no active committee yet. Switching is how a
+        // user with several committees and none chosen gets one; requesting
+        // access is how a user with none gets started.
+        group.MapPost("/switch-org", SwitchOrgAsync).RequireAuthorization();
+        group.MapPost("/request-access", RequestAccessAsync).RequireAuthorization();
 
         return app;
     }
@@ -130,6 +138,68 @@ public static class AuthEndpoints
         await sessions.DestroySessionAsync(token, ct);
         return Results.Ok(new { ok = true });
     }
+
+    /// <summary>
+    /// Pins the caller's session to one of their committees.
+    ///
+    /// Deliberately a server round trip rather than a client-side selection:
+    /// the tenant every later request runs under comes from the session row, so
+    /// this is the only way to change it, and membership is re-verified here
+    /// before anything moves.
+    /// </summary>
+    private static async Task<IResult> SwitchOrgAsync(
+        [FromBody] SwitchOrgRequest? request, HttpContext http, SessionService sessions, CancellationToken ct)
+    {
+        if (request?.OrgId is not { } orgId || orgId == Guid.Empty)
+        {
+            return Results.Json(new { error = "org_id is required" }, statusCode: 400);
+        }
+
+        var token = http.User.FindFirst(LegacySessionAuthenticationDefaults.TokenClaimType)!.Value;
+        var userId = Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+
+        if (!await sessions.SwitchOrgAsync(userId, orgId, token, ct))
+        {
+            // 403, not 404: telling an outsider whether a committee id exists is
+            // itself a small leak.
+            return Results.Json(new { error = "You are not a member of that committee" }, statusCode: 403);
+        }
+
+        return Results.Ok(await sessions.LoadSessionAsync(token, ct));
+    }
+
+    /// <summary>
+    /// Asks to join a committee, by its slug. Creates a PENDING membership;
+    /// the committee's own admin still has to approve it. There is no default
+    /// committee, so signing up no longer implies a request anywhere.
+    /// </summary>
+    private static async Task<IResult> RequestAccessAsync(
+        [FromBody] RequestAccessRequest? request, HttpContext http, UtsavDbContext db,
+        ExternalIdentityService identities, CancellationToken ct)
+    {
+        var slug = request?.Slug?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(slug))
+        {
+            return Results.Json(new { error = "slug is required" }, statusCode: 400);
+        }
+
+        var org = await db.Organizations.AsNoTracking()
+            .Where(o => o.Slug == slug && o.IsActive)
+            .Select(o => new { o.Id, o.Name, o.Slug })
+            .SingleOrDefaultAsync(ct);
+        if (org is null)
+        {
+            return Results.Json(new { error = "No such committee" }, statusCode: 404);
+        }
+
+        var userId = Guid.Parse(http.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        await identities.RequestAccessAsync(userId, org.Id, ct);
+        return Results.Ok(new { ok = true, org });
+    }
+
+    private sealed record SwitchOrgRequest(Guid? OrgId);
+
+    private sealed record RequestAccessRequest(string? Slug);
 
     private sealed record LoginRequest(string? Email, string? Password);
 
