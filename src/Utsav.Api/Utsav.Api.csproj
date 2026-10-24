@@ -48,6 +48,11 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>Utsav.UnitTests</_Parameter1>
     </AssemblyAttribute>
+    <!-- The isolation suite boots the real app in-process (WebApplicationFactory
+         needs the internal top-level Program type) and drives DynamicSql. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Utsav.IsolationTests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <PropertyGroup>
