@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Utsav.Infrastructure.Data.Entities;
@@ -165,6 +165,7 @@ public partial class UtsavDbContext : DbContext
                 .HasColumnName("id");
             entity.Property(e => e.Amount)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("amount");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()")
@@ -214,6 +215,7 @@ public partial class UtsavDbContext : DbContext
             entity.Property(e => e.AdvanceId).HasColumnName("advance_id");
             entity.Property(e => e.Amount)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("amount");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()")
@@ -381,10 +383,12 @@ public partial class UtsavDbContext : DbContext
                 .HasColumnName("id");
             entity.Property(e => e.AdvancePaid)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("advance_paid");
             entity.Property(e => e.Category).HasColumnName("category");
             entity.Property(e => e.ContractAmount)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("contract_amount");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()")
@@ -432,6 +436,7 @@ public partial class UtsavDbContext : DbContext
                 .HasColumnName("id");
             entity.Property(e => e.Amount)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("amount");
             entity.Property(e => e.ContractId).HasColumnName("contract_id");
             entity.Property(e => e.CreatedAt)
@@ -606,6 +611,7 @@ public partial class UtsavDbContext : DbContext
             entity.Property(e => e.AdvanceId).HasColumnName("advance_id");
             entity.Property(e => e.Amount)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("amount");
             entity.Property(e => e.BillNo).HasColumnName("bill_no");
             entity.Property(e => e.Category).HasColumnName("category");
@@ -698,6 +704,7 @@ public partial class UtsavDbContext : DbContext
                 .HasColumnName("id");
             entity.Property(e => e.Amount)
                 .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
                 .HasColumnName("amount");
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()")
@@ -1030,7 +1037,7 @@ public partial class UtsavDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()")
                 .HasColumnName("created_at");
-            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.IsActive).HasDefaultValue(false).HasColumnName("is_active");
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Notes).HasColumnName("notes");
             entity.Property(e => e.OpeningCashBalance)
@@ -1114,7 +1121,7 @@ public partial class UtsavDbContext : DbContext
             // installation — re-subscribing the same device (e.g. after
             // signing in as someone else) replaces the row instead of piling
             // up duplicates that would each get their own copy of a push.
-            entity.HasIndex(e => e.Endpoint, "push_subscriptions_endpoint_key").IsUnique();
+            entity.HasIndex(e => new { e.OrgId, e.Endpoint }, "push_subscriptions_org_endpoint_key").IsUnique();
             entity.HasIndex(e => e.UserId, "idx_push_subscriptions_user");
 
             entity.Property(e => e.Id)
@@ -1293,7 +1300,7 @@ public partial class UtsavDbContext : DbContext
 
             entity.ToTable("feast_tokens");
 
-            entity.HasIndex(e => e.Code, "feast_tokens_code_key").IsUnique();
+            entity.HasIndex(e => new { e.OrgId, e.Code }, "feast_tokens_org_code_key").IsUnique();
 
             entity.HasIndex(e => e.OrgId, "idx_feast_tokens_org");
 

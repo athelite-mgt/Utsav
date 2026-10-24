@@ -1,8 +1,8 @@
-name: Build, test, deploy to Azure App Service
+name: Build, test (incl. cross-tenant isolation), deploy to Azure App Service
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   # Lets a deploy be re-run by hand from the Actions tab without a new commit
   # — useful right after a portal-side config change (Application Settings,
   # SQL firewall rule) that doesn't touch the repo at all.
@@ -11,12 +11,12 @@ on:
 env:
   DOTNET_VERSION: "10.0.x"
   NODE_VERSION: "22.x"
-  # The site's actual public hostname is REDACTED-HOST,
-  # but the publish profile's msdeploySite (what azure/webapps-deploy actually
-  # validates app-name against) is the shorter "puja" — using the hostname
-  # here fails with "Publish profile is invalid for app-name and slot-name
-  # provided", discovered by reading the failed run's logs rather than guessing.
-  AZURE_WEBAPP_NAME: "puja"
+  # Deliberately a placeholder. This product is separate from the original
+  # single-committee app, and this workflow must never be able to deploy over
+  # it: the deploy job also refuses to run until UTSAV_DEPLOY_ENABLED is set
+  # to "true" as a repository variable, after the new App Service exists and
+  # its own publish profile is stored as UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE.
+  AZURE_WEBAPP_NAME: "REPLACE-WITH-NEW-APP-SERVICE-NAME"
 
 jobs:
   # Runs on every push, including branches that never deploy — the point is
@@ -40,6 +40,22 @@ jobs:
       - name: Unit tests
         run: dotnet test tests/Utsav.UnitTests --no-build --configuration Release
 
+      # The isolation suite needs a real SQL Server (row-level security and
+      # session context have to behave exactly as they will in production),
+      # so it runs against a throwaway container with throwaway passwords.
+      # It FAILS, rather than skips, when it cannot run: a cross-tenant leak
+      # must never be able to slip through as an unconfigured, green build.
+      - name: Generate throwaway database passwords
+        run: |
+          echo "MSSQL_SA_PASSWORD=Aa1!$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+          echo "UTSAV_APP_PASSWORD=Bb2!$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+
+      - name: Start SQL Server
+        run: docker compose -f docker-compose.dev.yml up -d --wait
+
+      - name: Cross-tenant isolation tests
+        run: dotnet test tests/Utsav.IsolationTests --no-build --configuration Release --verbosity normal
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -54,7 +70,7 @@ jobs:
 
   deploy:
     needs: build-and-test
-    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.UTSAV_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -89,5 +105,5 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          publish-profile: ${{ secrets.UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE }}
           package: ./publish

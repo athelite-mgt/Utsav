@@ -11,17 +11,17 @@ public class WriteIsolationTests(DatabaseFixture fixture)
     [Fact]
     public async Task A_created_row_is_stamped_with_the_callers_committee_not_the_bodys()
     {
-        using var asA = fixture.ClientFor(fixture.TokenForA);
+        using var asC = fixture.ClientFor(fixture.TokenForC);
 
         // org_id in the body is never accepted: TableRegistry does not list the
         // column, so it is dropped before the statement is built.
-        var response = await asA.PostAsJsonAsync("/api/vendors", new { name = "Forged Vendor", org_id = fixture.TenantB });
+        var response = await asC.PostAsJsonAsync("/api/vendors", new { name = "Forged Vendor", org_id = fixture.TenantB });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var inA = fixture.ContextFor(fixture.TenantA);
+        await using var inC = fixture.ContextFor(fixture.TenantC);
         await using var inB = fixture.ContextFor(fixture.TenantB);
-        Assert.Equal(fixture.TenantA, (await inA.Vendors.SingleAsync(v => v.Name == "Forged Vendor")).OrgId);
+        Assert.Equal(fixture.TenantC, (await inC.Vendors.SingleAsync(v => v.Name == "Forged Vendor")).OrgId);
         Assert.False(await inB.Vendors.AnyAsync(v => v.Name == "Forged Vendor"));
     }
 
@@ -129,12 +129,12 @@ public class WriteIsolationTests(DatabaseFixture fixture)
     public async Task A_legitimate_reference_within_the_same_committee_still_works()
     {
         // The guard above must not turn into a blanket refusal of foreign keys.
-        using var asA = fixture.ClientFor(fixture.TokenForA);
+        using var asC = fixture.ClientFor(fixture.TokenForC);
 
-        var response = await asA.PostAsJsonAsync("/api/expenses", new
+        var response = await asC.PostAsJsonAsync("/api/expenses", new
         {
-            year_id = fixture.A.Year, category = "Decoration", amount = 11, details = "own-ref ok",
-            vendor_id = fixture.A.Vendor,
+            year_id = fixture.C.Year, category = "Decoration", amount = 11, details = "own-ref ok",
+            vendor_id = fixture.C.Vendor,
         });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -143,12 +143,12 @@ public class WriteIsolationTests(DatabaseFixture fixture)
     [Fact]
     public async Task A_write_is_audited_under_the_callers_committee()
     {
-        using var asA = fixture.ClientFor(fixture.TokenForA);
+        using var asC = fixture.ClientFor(fixture.TokenForC);
         var tag = $"audit-{Guid.NewGuid():N}";
 
-        var response = await asA.PostAsJsonAsync("/api/cash_ledger", new
+        var response = await asC.PostAsJsonAsync("/api/cash_ledger", new
         {
-            year_id = fixture.A.Year, party = tag, amount = 7, entry_date = "2026-10-06",
+            year_id = fixture.C.Year, party = tag, amount = 7, entry_date = "2026-10-06",
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -159,36 +159,38 @@ public class WriteIsolationTests(DatabaseFixture fixture)
             .ToList();
 
         Assert.NotEmpty(entries);
-        Assert.All(entries, e => Assert.Equal(fixture.TenantA, e.OrgId));
+        Assert.All(entries, e => Assert.Equal(fixture.TenantC, e.OrgId));
     }
 
     [Fact]
     public async Task A_transaction_notification_is_recorded_for_the_committee_that_made_it()
     {
-        using var asA = fixture.ClientFor(fixture.TokenForA);
+        using var asC = fixture.ClientFor(fixture.TokenForC);
         var tag = $"notify-{Guid.NewGuid():N}";
 
-        var response = await asA.PostAsJsonAsync("/api/expenses", new
+        var response = await asC.PostAsJsonAsync("/api/expenses", new
         {
-            year_id = fixture.A.Year, category = "Decoration", amount = 12, details = tag,
+            year_id = fixture.C.Year, category = "Decoration", amount = 12, details = tag,
         });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // The push worker runs in the background, outside any request, so its
         // tenant has to be established from the notification itself.
-        var seenByA = 0;
-        for (var attempt = 0; attempt < 40 && seenByA == 0; attempt++)
+        var seenByC = 0;
+        for (var attempt = 0; attempt < 40 && seenByC == 0; attempt++)
         {
-            await using var inA = fixture.ContextFor(fixture.TenantA);
-            seenByA = await inA.Notifications.CountAsync();
-            if (seenByA == 0)
+            await using var inC = fixture.ContextFor(fixture.TenantC);
+            seenByC = await inC.Notifications.CountAsync();
+            if (seenByC == 0)
             {
                 await Task.Delay(100);
             }
         }
 
+        await using var inA = fixture.ContextFor(fixture.TenantA);
         await using var inB = fixture.ContextFor(fixture.TenantB);
-        Assert.True(seenByA > 0, "the notification was never recorded for committee A");
+        Assert.True(seenByC > 0, "the notification was never recorded for the committee that made the change");
+        Assert.Equal(0, await inA.Notifications.CountAsync());
         Assert.Equal(0, await inB.Notifications.CountAsync());
     }
 }

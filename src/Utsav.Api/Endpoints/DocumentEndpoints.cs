@@ -4,6 +4,7 @@ using Utsav.Api.Authentication;
 using Utsav.Domain.Authorization;
 using Utsav.Infrastructure.Authentication;
 using Utsav.Infrastructure.Data;
+using Utsav.Infrastructure.Data.Entities;
 using Utsav.Infrastructure.Storage;
 using static Utsav.Api.Endpoints.AdvanceEndpoints;
 
@@ -129,6 +130,18 @@ public static class DocumentEndpoints
         });
     }
 
+    /// <summary>
+    /// The tenant boundary for document bytes. Blob storage sits outside the
+    /// SQL database, so row-level security does not protect it: the blob name
+    /// prefix ({orgId}/) is the boundary. The row lookup is already tenant
+    /// scoped, but the bytes are fetched, and deleted, by the stored path, and
+    /// a row that ever pointed outside its own committee's prefix (a bad
+    /// import, a bug, tampering) must not become a way to read or destroy
+    /// another committee's file.
+    /// </summary>
+    private static bool BlobBelongsToCommittee(Document doc, Guid tenant) =>
+        doc.BlobName.StartsWith($"{tenant}/", StringComparison.Ordinal);
+
     private static async Task<IResult> DownloadAsync(Guid id, UtsavDbContext db, IBlobStorageService storage, CancellationToken ct)
     {
         var doc = await db.Documents.AsNoTracking()
@@ -141,6 +154,11 @@ public static class DocumentEndpoints
         if (!storage.IsConfigured)
         {
             return Results.Json(new { error = "Document storage isn't set up on the server yet." }, statusCode: 503);
+        }
+
+        if (!BlobBelongsToCommittee(doc, db.TenantId))
+        {
+            return Results.NotFound();
         }
 
         var download = await storage.DownloadAsync(doc.BlobName, ct);
@@ -164,9 +182,14 @@ public static class DocumentEndpoints
         // swallowed rather than surfaced as a failed delete.
         try
         {
-            if (storage.IsConfigured)
+            if (storage.IsConfigured && BlobBelongsToCommittee(doc, db.TenantId))
             {
                 await storage.DeleteAsync(doc.BlobName, ct);
+            }
+            else if (storage.IsConfigured)
+            {
+                loggerFactory.CreateLogger("DocumentEndpoints").LogWarning(
+                    "Deleted document {Id} but left blob {BlobName} alone: it is outside the committee's prefix", id, doc.BlobName);
             }
         }
         catch (Exception ex)

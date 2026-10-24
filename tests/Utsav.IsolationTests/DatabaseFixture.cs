@@ -40,9 +40,17 @@ public sealed class DatabaseFixture : IAsyncLifetime
 {
     public const string MarkerA = "ZZA";
     public const string MarkerB = "ZZB";
+    public const string MarkerC = "ZZC";
 
     public Guid TenantA { get; } = Guid.Parse("11111111-1111-1111-1111-111111111111");
     public Guid TenantB { get; } = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+    /// <summary>
+    /// A third committee used ONLY by tests that change data (year rollover,
+    /// approvals, settlements), so A and B stay pristine for the read and
+    /// leak tests regardless of the order tests run in.
+    /// </summary>
+    public Guid TenantC { get; } = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
     /// <summary>Admin of both committees: the switcher user.</summary>
     public Guid UserInBoth { get; } = Guid.NewGuid();
@@ -53,14 +61,19 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>A real account with no membership anywhere.</summary>
     public Guid UserOutsider { get; } = Guid.NewGuid();
 
+    /// <summary>Admin of committee C only.</summary>
+    public Guid UserC { get; } = Guid.NewGuid();
+
     public string TokenForA { get; } = "aaaa" + Guid.NewGuid().ToString("N");
     public string TokenForB { get; } = "bbbb" + Guid.NewGuid().ToString("N");
     public string TokenUnpinned { get; } = "cccc" + Guid.NewGuid().ToString("N");
     public string TokenAOnly { get; } = "dddd" + Guid.NewGuid().ToString("N");
     public string TokenOutsider { get; } = "eeee" + Guid.NewGuid().ToString("N");
+    public string TokenForC { get; } = "ffff" + Guid.NewGuid().ToString("N");
 
     public TenantData A { get; private set; } = null!;
     public TenantData B { get; private set; } = null!;
+    public TenantData C { get; private set; } = null!;
 
     public InMemoryAuditSink Audit { get; } = new();
     public InMemoryBlobStore Blobs { get; } = new();
@@ -244,12 +257,14 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             identity.Organizations.AddRange(
                 new Organization { Id = TenantA, Name = "Durga Committee", Slug = "durga", City = "Barrackpore", IsActive = true },
-                new Organization { Id = TenantB, Name = "Kali Committee", Slug = "kali", City = "Barrackpore", IsActive = true });
+                new Organization { Id = TenantB, Name = "Kali Committee", Slug = "kali", City = "Barrackpore", IsActive = true },
+                new Organization { Id = TenantC, Name = "Flow Committee", Slug = "flow", City = "Barrackpore", IsActive = true });
 
             identity.Users.AddRange(
                 new User { Id = UserInBoth, Email = "both@test.local", FullName = "Both", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
                 new User { Id = UserInAOnly, Email = "aonly@test.local", FullName = "A Only", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
-                new User { Id = UserOutsider, Email = "outsider@test.local", FullName = "Outsider", AuthProvider = "local", PasswordHash = hash, Role = "viewer" });
+                new User { Id = UserOutsider, Email = "outsider@test.local", FullName = "Outsider", AuthProvider = "local", PasswordHash = hash, Role = "viewer" },
+                new User { Id = UserC, Email = "c@test.local", FullName = "C Admin", AuthProvider = "local", PasswordHash = hash, Role = "viewer" });
 
             identity.OrgMembers.AddRange(
                 new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserInBoth, Role = "admin", Status = "active" },
@@ -257,20 +272,23 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserInAOnly, Role = "finance", Status = "active" },
                 // A pending request at A only, so the access-request list has
                 // something to leak into B.
-                new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserOutsider, Role = "viewer", Status = "pending" });
+                new OrgMember { Id = Guid.NewGuid(), OrgId = TenantA, UserId = UserOutsider, Role = "viewer", Status = "pending" },
+                new OrgMember { Id = Guid.NewGuid(), OrgId = TenantC, UserId = UserC, Role = "admin", Status = "active" });
 
             identity.Sessions.AddRange(
                 new Session { Token = TokenForA, UserId = UserInBoth, OrgId = TenantA },
                 new Session { Token = TokenForB, UserId = UserInBoth, OrgId = TenantB },
                 new Session { Token = TokenUnpinned, UserId = UserInBoth, OrgId = null },
                 new Session { Token = TokenAOnly, UserId = UserInAOnly, OrgId = TenantA },
-                new Session { Token = TokenOutsider, UserId = UserOutsider, OrgId = null });
+                new Session { Token = TokenOutsider, UserId = UserOutsider, OrgId = null },
+                new Session { Token = TokenForC, UserId = UserC, OrgId = TenantC });
 
             await identity.SaveChangesAsync();
         }
 
         A = await SeedTenantAsync(TenantA, MarkerA, collected: 5000m, spent: 1000m, forecast: 20000m, advance: 1500m);
         B = await SeedTenantAsync(TenantB, MarkerB, collected: 7000m, spent: 2000m, forecast: 30000m, advance: 2500m);
+        C = await SeedTenantAsync(TenantC, MarkerC, collected: 900m, spent: 300m, forecast: 5000m, advance: 400m);
     }
 
     private async Task<TenantData> SeedTenantAsync(

@@ -109,7 +109,13 @@ internal static class DynamicSql
             await TryAuditAsync(db, table, verb, AuditEntry.Success, null, label, before, parameterList, ct);
             // Failed mutations never reach here (the catch below runs instead)
             // — nobody needs paging about a save that didn't happen.
-            await TryNotifyAsync(db.TenantId, table, verb, label, before, parameterList, ct);
+            // A statement that matched no row changed nothing, so there is nothing to
+            // announce - e.g. an UPDATE or DELETE aimed at an id that is not in this
+            // committee. (It is still audited above: the attempt is worth a trail.)
+            if (rowsAffected > 0)
+            {
+                await TryNotifyAsync(db.TenantId, table, verb, label, before, parameterList, ct);
+            }
             return rowsAffected;
         }
         catch (Exception ex)

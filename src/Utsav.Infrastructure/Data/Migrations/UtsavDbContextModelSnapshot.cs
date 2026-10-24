@@ -138,8 +138,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<decimal>("Amount")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("amount");
 
                     b.Property<DateTime>("CreatedAt")
@@ -230,8 +232,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("advance_id");
 
                     b.Property<decimal>("Amount")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("amount");
 
                     b.Property<DateTime>("CreatedAt")
@@ -623,8 +627,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<decimal>("AdvancePaid")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("advance_paid");
 
                     b.Property<string>("Category")
@@ -633,8 +639,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("category");
 
                     b.Property<decimal>("ContractAmount")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("contract_amount");
 
                     b.Property<DateTime>("CreatedAt")
@@ -716,8 +724,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<decimal>("Amount")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("amount");
 
                     b.Property<Guid>("ContractId")
@@ -924,8 +934,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("advance_id");
 
                     b.Property<decimal>("Amount")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("amount");
 
                     b.Property<string>("BillNo")
@@ -1244,8 +1256,9 @@ namespace Utsav.Infrastructure.Data.Migrations
 
                     b.HasIndex("OrgId", "YearId");
 
-                    b.HasIndex(new[] { "Code" }, "feast_tokens_code_key")
-                        .IsUnique();
+                    b.HasIndex(new[] { "OrgId", "Code" }, "feast_tokens_org_code_key")
+                        .IsUnique()
+                        .HasFilter("[org_id] IS NOT NULL");
 
                     b.HasIndex(new[] { "FeastId" }, "idx_feast_tokens_feast");
 
@@ -1267,8 +1280,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("NEWSEQUENTIALID()");
 
                     b.Property<decimal>("Amount")
+                        .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
                         .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
                         .HasColumnName("amount");
 
                     b.Property<DateTime>("CreatedAt")
@@ -1816,7 +1831,9 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
                     b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bit")
+                        .HasDefaultValue(false)
                         .HasColumnName("is_active");
 
                     b.Property<string>("Name")
@@ -1923,12 +1940,11 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.HasKey("Id")
                         .HasName("push_subscriptions_pkey");
 
-                    b.HasIndex("OrgId");
-
                     b.HasIndex(new[] { "UserId" }, "idx_push_subscriptions_user");
 
-                    b.HasIndex(new[] { "Endpoint" }, "push_subscriptions_endpoint_key")
-                        .IsUnique();
+                    b.HasIndex(new[] { "OrgId", "Endpoint" }, "push_subscriptions_org_endpoint_key")
+                        .IsUnique()
+                        .HasFilter("[org_id] IS NOT NULL");
 
                     b.ToTable("push_subscriptions", (string)null);
                 });
