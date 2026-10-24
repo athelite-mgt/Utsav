@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Utsav.Api.Security;
 using System.Text.Json;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.StaticFiles;
@@ -42,6 +43,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHsts(h => h.MaxAge = TimeSpan.FromDays(365));
 
 // Endpoints that take a secret (a password, a provider token, an invite code)
 // share one per-client budget, so guessing across several of them does not
@@ -127,15 +129,30 @@ DynamicSql.Configure(
 // redirects every single one — an infinite loop, since the redirect target is
 // itself "http" from Kestrel's point of view. Must run before anything that
 // inspects the scheme.
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+app.UseForwardedHeaders(ForwardedHeadersSetup.Create(
+    ForwardedHeadersSetup.IsAppService(Environment.GetEnvironmentVariable)));
+
+// Registered before anything that can short-circuit (redirects, static files,
+// errors), so every response carries the browser-side defences.
+app.Use((context, next) =>
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    context.Response.OnStarting(() =>
+    {
+        SecurityHeaders.Apply(context.Response);
+        return Task.CompletedTask;
+    });
+    return next();
 });
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+else
+{
+    // One year; browsers ignore this over plain HTTP, and UseHsts skips loopback.
+    app.UseHsts();
 }
 
 app.UseHttpsRedirection();

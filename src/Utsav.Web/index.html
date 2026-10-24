@@ -23,20 +23,13 @@
     <meta name="apple-mobile-web-app-title" content="Utsav" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Non-blocking font load: app renders immediately with system-ui fallback,
-         then upgrades to IBM Plex when fonts arrive. Works offline. -->
+    <!-- A plain stylesheet link: the previous media=print/onload swap relied on an
+         inline handler, which the Content-Security-Policy (script-src 'self') refuses.
+         display=swap keeps text visible in the fallback font while IBM Plex loads. -->
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      media="print"
-      onload="this.media='all'"
     />
-    <noscript>
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-      />
-    </noscript>
     <title>Utsav</title>
     <!-- Google Identity Services — loaded eagerly so the Sign-In button is
          ready the moment Login.tsx mounts. Harmless if VITE_GOOGLE_CLIENT_ID

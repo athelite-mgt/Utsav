@@ -144,7 +144,21 @@ committee that already has people in it.
   response); a missing or wrong header is a 403.
 - Scripts and integrations use **API keys** (`X-Api-Key`), not sessions.
 
-## 8. Known gaps
+## 8. Browser security headers
+
+Every response carries a Content-Security-Policy (scripts only from the app
+itself and Google's sign-in library; no framing, plugins or base-URL changes),
+`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and
+`Permissions-Policy`; production also sends HSTS (one year). The policy lives in
+`src/Utsav.Api/Security/SecurityHeaders.cs`. **If a new third-party script,
+frame, font or API origin is ever added, it must be added there too**, or the
+browser will refuse it (check the console for "Refused to ...").
+
+Client addresses come from the platform's `X-Forwarded-For` (trusted only when
+`WEBSITE_SITE_NAME` is present, i.e. on App Service), which the sign-in throttle
+relies on.
+
+## 9. Known gaps
 
 - Custom domain per committee, per-tenant PWA manifest/icons and a self-serve
   signup flow are intentionally not built.
