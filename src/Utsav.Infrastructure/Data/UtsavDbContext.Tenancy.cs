@@ -34,12 +34,13 @@ public partial class UtsavDbContext
     /// <summary>
     /// Entities carrying <c>org_id</c> that must NOT be tenant-filtered, because
     /// they are read to establish or list tenancy: a session loads before any
-    /// tenant exists, and the committee switcher lists memberships across
-    /// committees. Filtering either would make sign-in impossible. They are
+    /// tenant exists, the committee switcher lists memberships across
+    /// committees, and an invitation is redeemed by someone with no committee
+    /// yet. Filtering either would make sign-in impossible. They are
     /// protected instead by the unguessable session token and by membership
     /// being re-verified on every session load.
     /// </summary>
-    private static readonly HashSet<Type> UnfilteredByDesign = [typeof(Session), typeof(OrgMember)];
+    private static readonly HashSet<Type> UnfilteredByDesign = [typeof(Session), typeof(OrgMember), typeof(OrgInvite)];
 
     /// <summary>
     /// Guid.Empty when no tenant is resolved, which matches no row. A job or

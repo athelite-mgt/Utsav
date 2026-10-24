@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Utsav.Domain.Tenancy;
+using Utsav.Infrastructure.Authentication;
 using Utsav.Infrastructure.Audit;
 using Utsav.Infrastructure.Data;
 using Utsav.Infrastructure.Push;
@@ -44,6 +45,9 @@ public static class DependencyInjection
         services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 
         services.AddScoped<TenantSessionInterceptor>();
+        services.AddScoped<InviteService>();
+        services.AddScoped<TenantProvisioner>();
+        services.AddScoped<PlatformBootstrapper>();
         services.AddDbContext<UtsavDbContext>((serviceProvider, options) =>
             options
                 // Resolved per scope so the interceptor sees THAT request's

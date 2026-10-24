@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { KeyRound } from "lucide-react";
 import { navItems, type NavItem } from "@/config/nav";
 import { useAuth } from "@/context/AuthContext";
 import { AppLogoTile } from "@/components/brand/Athelite";
@@ -15,7 +16,7 @@ const groupLabels: Record<NavItem["group"], string> = {
 };
 
 export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { can } = useAuth();
+  const { can, isPlatformAdmin } = useAuth();
   const items = navItems.filter((n) => !n.permission || can(n.permission));
   const groups = ["overview", "income", "feast", "spending", "planning", "system"] as const;
 
@@ -54,6 +55,19 @@ export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         );
       })}
+
+      {isPlatformAdmin && (
+        <div>
+          <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Platform</p>
+          <NavLink
+            to="/platform"
+            onClick={onNavigate}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <KeyRound className="h-[18px] w-[18px]" /> Platform console
+          </NavLink>
+        </div>
+      )}
     </nav>
   );
 }
@@ -69,7 +83,7 @@ export function BrandMark({ compact }: { compact?: boolean }) {
       {!compact && (
         <div className="min-w-0 leading-tight">
           <p className="truncate font-display text-sm font-bold tracking-tight">{org?.name ?? "Utsav"}</p>
-          <p className="truncate text-[11px] text-muted-foreground">Utsav · by Athelite</p>
+          <p className="truncate text-[11px] text-muted-foreground">{org ? "Utsav · by Athelite" : "by Athelite"}</p>
         </div>
       )}
     </div>

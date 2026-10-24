@@ -61,8 +61,32 @@ public partial class UtsavDbContext
         configurationBuilder.Properties<decimal>().HavePrecision(12, 2);
     }
 
+    public virtual DbSet<OrgInvite> OrgInvites { get; set; }
+
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<OrgInvite>(entity =>
+        {
+            entity.ToTable("org_invites");
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.CodeHash, "org_invites_code_hash_key").IsUnique();
+            entity.HasIndex(e => e.OrgId, "IX_org_invites_org_id");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrgId).HasColumnName("org_id");
+            entity.Property(e => e.Email).HasColumnName("email");
+            entity.Property(e => e.Role).HasColumnName("role").HasMaxLength(32);
+            entity.Property(e => e.CodeHash).HasColumnName("code_hash").HasMaxLength(64);
+            entity.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(e => e.RedeemedAt).HasColumnName("redeemed_at");
+            entity.Property(e => e.RedeemedByUserId).HasColumnName("redeemed_by_user_id");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("SYSUTCDATETIME()")
+                .HasColumnName("created_at");
+
+            entity.HasOne(e => e.Org).WithMany().HasForeignKey(e => e.OrgId);
+        });
+
         foreach (var (entity, property) in FreeTextColumns)
         {
             modelBuilder.Entity(entity).Property(property).HasColumnType("nvarchar(max)");

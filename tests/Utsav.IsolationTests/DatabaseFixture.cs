@@ -182,14 +182,14 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// test order cannot matter.
     /// </summary>
     public async Task<(Guid UserId, string Token)> NewMemberAsync(
-        string label, (Guid Org, string Role, string Status)[] memberships, Guid? pinnedTo = null)
+        string label, (Guid Org, string Role, string Status)[] memberships, Guid? pinnedTo = null, string? email = null)
     {
         var userId = Guid.NewGuid();
         var token = "t" + Guid.NewGuid().ToString("N");
         await using var identity = ContextWithNoTenant();
         identity.Users.Add(new User
         {
-            Id = userId, Email = $"{label}-{userId:N}@test.local", FullName = label, AuthProvider = "local",
+            Id = userId, Email = email ?? $"{label}-{userId:N}@test.local", FullName = label, AuthProvider = "local",
             PasswordHash = "!", Role = "viewer",
         });
         foreach (var (org, role, status) in memberships)

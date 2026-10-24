@@ -15,7 +15,7 @@ namespace Utsav.IsolationTests;
 [Collection(nameof(DatabaseFixture))]
 public class RlsBackstopTests(DatabaseFixture fixture)
 {
-    private static readonly string[] ExemptTables = ["sessions", "org_members", "api_keys"];
+    private static readonly string[] ExemptTables = ["sessions", "org_members", "api_keys", "org_invites"];
 
     private async Task<List<string>> ProtectedTablesAsync() => await fixture.QueryAsAdminAsync(
         "SELECT DISTINCT OBJECT_NAME(target_object_id) FROM sys.security_predicates ORDER BY 1");
@@ -38,7 +38,7 @@ public class RlsBackstopTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task The_set_of_protected_tables_is_exactly_every_org_scoped_table_but_the_three_exempt_ones()
+    public async Task The_set_of_protected_tables_is_exactly_every_org_scoped_table_but_the_four_exempt_ones()
     {
         // Ground truth from SQL Server's own catalog, compared against the
         // application guard's list: a table that carries org_id but was never

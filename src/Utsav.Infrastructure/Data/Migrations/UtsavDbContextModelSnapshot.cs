@@ -1524,6 +1524,63 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.ToTable("offerings", (string)null);
                 });
 
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.OrgInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)")
+                        .HasColumnName("email");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("OrgId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("org_id");
+
+                    b.Property<DateTime?>("RedeemedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("redeemed_at");
+
+                    b.Property<Guid?>("RedeemedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("redeemed_by_user_id");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("nvarchar(32)")
+                        .HasColumnName("role");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "OrgId" }, "IX_org_invites_org_id");
+
+                    b.HasIndex(new[] { "CodeHash" }, "org_invites_code_hash_key")
+                        .IsUnique();
+
+                    b.ToTable("org_invites", (string)null);
+                });
+
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.OrgMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3320,6 +3377,17 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Navigation("Org");
 
                     b.Navigation("Year");
+                });
+
+            modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.OrgInvite", b =>
+                {
+                    b.HasOne("Utsav.Infrastructure.Data.Entities.Organization", "Org")
+                        .WithMany()
+                        .HasForeignKey("OrgId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Org");
                 });
 
             modelBuilder.Entity("Utsav.Infrastructure.Data.Entities.OrgMember", b =>

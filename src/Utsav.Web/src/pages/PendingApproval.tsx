@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Hourglass, LogOut, RefreshCw, Send } from "lucide-react";
+import { Hourglass, KeyRound, LogOut, RefreshCw, Send } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,11 @@ import { BrandMark } from "@/components/layout/NavContent";
  * they want to join, by its short name (slug).
  */
 export function PendingApproval() {
-  const { user, memberships, signOut, refreshSession, requestAccess } = useAuth();
+  const { user, memberships, isPlatformAdmin, signOut, refreshSession, requestAccess, redeemInvite } = useAuth();
   const [slug, setSlug] = useState("");
+  const [code, setCode] = useState("");
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,6 +34,16 @@ export function PendingApproval() {
     setBusy(false);
     if (result.error) setError(result.error);
     else setSlug("");
+  }
+
+  async function redeem(e: FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setCodeBusy(true);
+    setCodeError(null);
+    const result = await redeemInvite(code.trim());
+    setCodeBusy(false);
+    if (result.error) setCodeError(result.error);
   }
 
   return (
@@ -70,6 +83,30 @@ export function PendingApproval() {
         </form>
         {error && <p className="mt-2 text-left text-sm text-destructive">{error}</p>}
 
+        <div className="mt-6 border-t border-border pt-5 text-left">
+          <p className="text-sm font-medium">Have an invite code?</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            A new committee's first administrator gets a one-time code. Use it while signed in with the
+            email address it was issued for.
+          </p>
+          <form onSubmit={redeem} className="mt-3 flex gap-2">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="Invite code"
+              aria-label="Invite code"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              className="font-mono"
+            />
+            <Button type="submit" variant="secondary" disabled={codeBusy || !code.trim()}>
+              <KeyRound /> Use code
+            </Button>
+          </form>
+          {codeError && <p className="mt-2 text-sm text-destructive">{codeError}</p>}
+        </div>
+
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">
           <Button variant="outline" className="flex-1" onClick={() => refreshSession()}>
             <RefreshCw /> Check again
@@ -78,6 +115,11 @@ export function PendingApproval() {
             <LogOut /> Sign out
           </Button>
         </div>
+        {isPlatformAdmin && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            You're a platform operator. <a className="underline" href="/platform">Open the platform console</a>.
+          </p>
+        )}
         <div className="mt-6 flex justify-center opacity-70">
           <BrandMark compact />
         </div>

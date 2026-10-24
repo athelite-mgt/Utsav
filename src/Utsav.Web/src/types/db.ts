@@ -215,6 +215,26 @@ export interface Organization {
   accent_colour: string | null;
 }
 
+/** A committee as the platform operator's directory lists it: never its books. */
+export interface PlatformCommittee {
+  id: string;
+  name: string;
+  slug: string;
+  city: string | null;
+  is_active: boolean;
+  created_at: string;
+  members: number;
+  pending_invite: boolean;
+}
+
+/** What creating a committee returns. The invite code is shown once and never again. */
+export interface CreatedCommittee {
+  id: string;
+  slug: string;
+  invite_code: string;
+  invite_expires_at: string;
+}
+
 /** One committee the signed-in user belongs to, as returned by /auth/me. */
 export interface Membership {
   org_id: string;

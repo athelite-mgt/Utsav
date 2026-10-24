@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { YearProvider } from "@/context/YearContext";
@@ -9,6 +9,7 @@ import { Login } from "@/pages/Login";
 import { ServerOffline } from "@/pages/ServerOffline";
 import { PendingApproval } from "@/pages/PendingApproval";
 import { ChooseCommittee } from "@/pages/ChooseCommittee";
+import { PlatformConsole } from "@/pages/PlatformConsole";
 import { useSyncPushRegistration } from "@/hooks/useSyncPushRegistration";
 import { Dashboard } from "@/pages/Dashboard";
 import { ReportsPage } from "@/pages/Reports";
@@ -76,7 +77,8 @@ function HistoryRoute({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
-  const { loading, user, org, memberships, status, serverDown } = useAuth();
+  const { loading, user, org, memberships, isPlatformAdmin, status, serverDown } = useAuth();
+  const { pathname } = useLocation();
 
   // Keeps this device's push registration in step with the committee the
   // user is working in: a device is registered per committee, so it must be
@@ -86,6 +88,10 @@ export default function App() {
   if (loading) return <FullScreenLoader />;
   if (serverDown) return <ServerOffline />;
   if (!user) return <Login />;
+  // A platform operator gets the console: on request, and as their home when
+  // they belong to no committee (otherwise they would be stranded on the
+  // "join a committee" screen with nowhere to work).
+  if (isPlatformAdmin && (pathname.startsWith("/platform") || memberships.length === 0)) return <PlatformConsole />;
   if (status !== "active") return <PendingApproval />;
   // Active somewhere but no committee chosen yet: a user with several. Every
   // data endpoint refuses them until they pick one.

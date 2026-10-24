@@ -39,7 +39,7 @@ public static class TenancyGuard
         "budget_lines", "cash_ledger", "collection_payments", "collectors",
         "contract_payments", "contracts", "documents", "donors", "expenses",
         "feast_expenses", "feast_tokens", "feasts", "fund_transfers", "lookups",
-        "notifications", "offerings", "org_members", "org_role_mappings",
+        "notifications", "offerings", "org_invites", "org_members", "org_role_mappings",
         "puja_calendar_days", "puja_schedule", "puja_years", "push_subscriptions",
         "sessions", "special_donations", "subscriptions", "vendor_issues", "vendors",
         "workflow_items", "workflow_notes", "zones",

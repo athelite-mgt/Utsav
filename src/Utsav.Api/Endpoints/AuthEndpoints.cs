@@ -31,6 +31,7 @@ public static class AuthEndpoints
         // access is how a user with none gets started.
         group.MapPost("/switch-org", SwitchOrgAsync).RequireAuthorization();
         group.MapPost("/request-access", RequestAccessAsync).RequireAuthorization();
+        group.MapPost("/redeem-invite", RedeemInviteAsync).RequireAuthorization();
 
         return app;
     }
@@ -196,6 +197,39 @@ public static class AuthEndpoints
         await identities.RequestAccessAsync(userId, org.Id, ct);
         return Results.Ok(new { ok = true, org });
     }
+
+    /// <summary>
+    /// Redeems the one-time code a platform operator gave a committee's first
+    /// administrator. Needs the code AND an account registered under the
+    /// address it was issued for, so a stranger who merely registers that
+    /// address first gets nothing, and a wrong guess never uses the code up.
+    /// </summary>
+    private static async Task<IResult> RedeemInviteAsync(
+        [FromBody] RedeemInviteRequest? request, HttpContext http, InviteService invites,
+        SessionService sessions, CancellationToken ct)
+    {
+        var session = (SessionPayload)http.Items[nameof(SessionPayload)]!;
+        var result = await invites.RedeemAsync(session.User.Id, session.User.Email, request?.Code, ct);
+
+        switch (result.Outcome)
+        {
+            case RedeemOutcome.UnknownCode:
+                return Results.Json(new { error = "That code isn't valid." }, statusCode: 404);
+            case RedeemOutcome.AlreadyUsed:
+                return Results.Json(new { error = "That code has already been used." }, statusCode: 400);
+            case RedeemOutcome.Expired:
+                return Results.Json(new { error = "That code has expired. Ask for a new one." }, statusCode: 400);
+            case RedeemOutcome.WrongAccount:
+                return Results.Json(new { error = "That code was issued for a different email address." }, statusCode: 403);
+        }
+
+        // They came here to work in this committee: take them straight in.
+        var token = http.User.FindFirst(LegacySessionAuthenticationDefaults.TokenClaimType)!.Value;
+        await sessions.SwitchOrgAsync(session.User.Id, result.OrgId!.Value, token, ct);
+        return Results.Ok(await sessions.LoadSessionAsync(token, ct));
+    }
+
+    private sealed record RedeemInviteRequest(string? Code);
 
     private sealed record SwitchOrgRequest(Guid? OrgId);
 

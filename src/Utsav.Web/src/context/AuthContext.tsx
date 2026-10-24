@@ -9,6 +9,8 @@ interface AuthContextValue {
   org: Organization | null;
   /** Every committee this account belongs to, including pending ones. */
   memberships: Membership[];
+  /** A platform operator may provision committees. It grants no access to any committee's data. */
+  isPlatformAdmin: boolean;
   role: AppRole | null;
   status: AccessStatus | null;
   can: (permission: Permission) => boolean;
@@ -22,6 +24,8 @@ interface AuthContextValue {
   switchCommittee: (orgId: string) => Promise<{ error: string | null }>;
   /** Ask to join a committee by its slug; an admin there still has to approve. */
   requestAccess: (slug: string) => Promise<{ error: string | null }>;
+  /** Redeem the one-time code a platform operator gave a committee's first administrator. */
+  redeemInvite: (code: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
@@ -32,6 +36,7 @@ interface SessionPayload {
   user: User;
   org: Organization | null;
   memberships: Membership[];
+  is_platform_admin?: boolean;
   role: AppRole | null;
   status: AccessStatus;
 }
@@ -41,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [org, setOrg] = useState<Organization | null>(null);
   const [memberships, setMemberships] = useState<Membership[]>([]);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [role, setRole] = useState<AppRole | null>(null);
   const [status, setStatus] = useState<AccessStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(s.user);
     setOrg(s.org);
     setMemberships(s.memberships ?? []);
+    setIsPlatformAdmin(s.is_platform_admin === true);
     setRole(s.role);
     setStatus(s.status);
   }
@@ -103,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     org,
     memberships,
+    isPlatformAdmin,
     role,
     status,
     can: (permission) => hasPermission(role, permission),
@@ -134,12 +142,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: e instanceof ApiError ? (e as Error).message : "Could not send the request" };
       }
     },
+    async redeemInvite(code) {
+      try {
+        applySession(await api.post<SessionPayload>("/auth/redeem-invite", { code }));
+        queryClient.clear();
+        return { error: null };
+      } catch (e) {
+        return { error: e instanceof ApiError ? (e as Error).message : "Could not redeem that code" };
+      }
+    },
     async signOut() {
       try { await api.post("/auth/logout"); } catch { /* token may already be gone */ }
       setToken(null);
       setUser(null);
       setOrg(null);
       setMemberships([]);
+      setIsPlatformAdmin(false);
       queryClient.clear();
       setRole(null);
       setStatus(null);

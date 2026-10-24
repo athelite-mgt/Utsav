@@ -22,12 +22,14 @@ namespace Utsav.Infrastructure.Data.Migrations;
 internal static class RowLevelSecurity
 {
     /// <summary>
-    /// Every table carrying org_id EXCEPT three, which are read before any
+    /// Every table carrying org_id EXCEPT four, which are read before any
     /// tenant is known and so cannot be tenant-scoped:
     ///   sessions     - loaded by an unguessable token to establish the tenant;
     ///   org_members  - listed across committees for the switcher;
     ///   api_keys     - looked up by a high-entropy hash, which is what
-    ///                  establishes the tenant.
+    ///                  establishes the tenant;
+    ///   org_invites  - redeemed by a code (stored only as a hash) by someone
+    ///                  who has no committee yet.
     /// Each is protected instead by its own secret and, for memberships, by
     /// being re-verified on every session load.
     /// </summary>

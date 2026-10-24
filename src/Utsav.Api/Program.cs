@@ -144,6 +144,19 @@ app.UseStaticFiles(staticFileOptions);
 // conjure a tenant at startup: committees are provisioned explicitly by a
 // platform administrator (see the platform endpoints).
 
+// Makes the first platform operator, if Platform:BootstrapAdminEmail names an
+// existing account and there is none yet. Inert once any operator exists.
+try
+{
+    using var scope = app.Services.CreateScope();
+    await scope.ServiceProvider.GetRequiredService<PlatformBootstrapper>()
+        .EnsureAsync(builder.Configuration["Platform:BootstrapAdminEmail"]);
+}
+catch (Exception ex)
+{
+    app.Logger.LogError(ex, "Platform operator bootstrap failed — continuing startup anyway.");
+}
+
 // Must not be why the app fails to start, for the Cosmos side: must
 // not be why the app fails to start, since the audit trail is deliberately
 // not on the critical path for a committee member's actual save (TASKLIST §5.6).
