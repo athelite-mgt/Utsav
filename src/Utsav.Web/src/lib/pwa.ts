@@ -18,7 +18,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DISMISS_KEY = "puja-install-dismissed";
+const DISMISS_KEY = "utsav-install-dismissed";
 /** How long a dismissal is respected before the card may reappear. */
 const DISMISS_DAYS = 21;
 

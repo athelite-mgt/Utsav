@@ -15,6 +15,10 @@ import "./index.css";
 // themselves correctly — it only writes CSS variables, no render involved.
 trackVisualViewport();
 
+// Sessions live in an httpOnly cookie now; drop the bearer token an earlier
+// build kept in localStorage so a credential does not linger there.
+try { localStorage.removeItem("puja-token"); } catch { /* private mode */ }
+
 // Registers the service worker that makes the app installable on mobile
 // (Add to Home Screen / Install app). Production-only and best-effort —
 // a failed registration should never block the app from rendering.

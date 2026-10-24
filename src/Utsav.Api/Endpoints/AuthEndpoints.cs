@@ -37,7 +37,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> LoginAsync(
-        [FromBody] LoginRequest? request, UtsavDbContext db, SessionService sessions, CancellationToken ct)
+        [FromBody] LoginRequest? request, HttpContext http, UtsavDbContext db, SessionService sessions, CancellationToken ct)
     {
         var email = (request?.Email ?? "").Trim();
         var password = request?.Password ?? "";
@@ -48,11 +48,11 @@ public static class AuthEndpoints
             return Results.Json(new { error = "Invalid email or password" }, statusCode: 401);
         }
 
-        return await IssueSessionAsync(user.Id, sessions, ct);
+        return await IssueSessionAsync(user.Id, http, sessions, ct);
     }
 
     private static async Task<IResult> SignupAsync(
-        [FromBody] SignupRequest? request, ExternalIdentityService identities, SessionService sessions, CancellationToken ct)
+        [FromBody] SignupRequest? request, HttpContext http, ExternalIdentityService identities, SessionService sessions, CancellationToken ct)
     {
         var email = (request?.Email ?? "").Trim();
         var password = request?.Password ?? "";
@@ -69,7 +69,7 @@ public static class AuthEndpoints
         try
         {
             var user = await identities.CreateLocalUserAsync(email, password, request?.FullName, ct);
-            return await IssueSessionAsync(user.Id, sessions, ct);
+            return await IssueSessionAsync(user.Id, http, sessions, ct);
         }
         catch (ExternalIdentityException e)
         {
@@ -78,7 +78,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> GoogleAsync(
-        [FromBody] GoogleRequest? request, ExternalIdentityService identities, SessionService sessions, CancellationToken ct)
+        [FromBody] GoogleRequest? request, HttpContext http, ExternalIdentityService identities, SessionService sessions, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request?.Credential))
         {
@@ -88,7 +88,7 @@ public static class AuthEndpoints
         try
         {
             var user = await identities.FromGoogleAsync(request.Credential, ct);
-            return await IssueSessionAsync(user.Id, sessions, ct);
+            return await IssueSessionAsync(user.Id, http, sessions, ct);
         }
         catch (ExternalIdentityException e)
         {
@@ -97,7 +97,7 @@ public static class AuthEndpoints
     }
 
     private static async Task<IResult> EntraAsync(
-        [FromBody] EntraRequest? request, ExternalIdentityService identities, SessionService sessions, CancellationToken ct)
+        [FromBody] EntraRequest? request, HttpContext http, ExternalIdentityService identities, SessionService sessions, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request?.IdToken))
         {
@@ -107,7 +107,7 @@ public static class AuthEndpoints
         try
         {
             var user = await identities.FromEntraAsync(request.IdToken, ct);
-            return await IssueSessionAsync(user.Id, sessions, ct);
+            return await IssueSessionAsync(user.Id, http, sessions, ct);
         }
         catch (ExternalIdentityException e)
         {
@@ -116,27 +116,43 @@ public static class AuthEndpoints
     }
 
     /// <summary>
-    /// Every sign-in path ends the same way — mint an opaque session token and
-    /// return the same <c>{token, user, org, role, status}</c> envelope, so the
+    /// Every sign-in path ends the same way: mint a session, hand the browser its
+    /// credential as an httpOnly cookie, and return the same envelope, so the
     /// front end doesn't care which button was pressed.
+    ///
+    /// The token itself is NOT in the response body. Putting it there would put
+    /// it straight back within reach of any script on the page, which is exactly
+    /// what moving it into a cookie is meant to prevent. What the page gets
+    /// instead is the CSRF token, which it needs and which cannot be turned back
+    /// into the session.
     /// </summary>
-    private static async Task<IResult> IssueSessionAsync(Guid userId, SessionService sessions, CancellationToken ct)
+    private static async Task<IResult> IssueSessionAsync(
+        Guid userId, HttpContext http, SessionService sessions, CancellationToken ct)
     {
         var token = await sessions.CreateSessionAsync(userId, ct);
         var session = await sessions.LoadSessionAsync(token, ct);
-        return Results.Ok(new AuthResponse(token, session!.User, session.Org, session.Role, session.Status, session.Memberships, session.IsPlatformAdmin));
+
+        SessionCookie.Issue(http, token, DateTimeOffset.UtcNow + SessionService.AbsoluteLifetime);
+        return Results.Ok(Envelope(session!, token));
     }
+
+    private static AuthResponse Envelope(SessionPayload session, string rawToken) => new(
+        session.User, session.Org, session.Role, session.Status, session.Memberships,
+        session.IsPlatformAdmin, SessionTokens.CsrfFor(rawToken));
+
+    private static string RawToken(HttpContext http) =>
+        http.User.FindFirst(LegacySessionAuthenticationDefaults.TokenClaimType)!.Value;
 
     private static IResult MeAsync(HttpContext http)
     {
         var session = (SessionPayload)http.Items[nameof(SessionPayload)]!;
-        return Results.Ok(session);
+        return Results.Ok(Envelope(session, RawToken(http)));
     }
 
     private static async Task<IResult> LogoutAsync(HttpContext http, SessionService sessions, CancellationToken ct)
     {
-        var token = http.User.FindFirst(LegacySessionAuthenticationDefaults.TokenClaimType)!.Value;
-        await sessions.DestroySessionAsync(token, ct);
+        await sessions.DestroySessionAsync(RawToken(http), ct);
+        SessionCookie.Clear(http);
         return Results.Ok(new { ok = true });
     }
 
@@ -166,7 +182,7 @@ public static class AuthEndpoints
             return Results.Json(new { error = "You are not a member of that committee" }, statusCode: 403);
         }
 
-        return Results.Ok(await sessions.LoadSessionAsync(token, ct));
+        return Results.Ok(Envelope((await sessions.LoadSessionAsync(token, ct))!, token));
     }
 
     /// <summary>
@@ -226,7 +242,7 @@ public static class AuthEndpoints
         // They came here to work in this committee: take them straight in.
         var token = http.User.FindFirst(LegacySessionAuthenticationDefaults.TokenClaimType)!.Value;
         await sessions.SwitchOrgAsync(session.User.Id, result.OrgId!.Value, token, ct);
-        return Results.Ok(await sessions.LoadSessionAsync(token, ct));
+        return Results.Ok(Envelope((await sessions.LoadSessionAsync(token, ct))!, token));
     }
 
     private sealed record RedeemInviteRequest(string? Code);
@@ -244,6 +260,6 @@ public static class AuthEndpoints
     private sealed record EntraRequest(string? IdToken);
 
     private sealed record AuthResponse(
-        string Token, SessionUser User, SessionOrganization? Org, string? Role, string Status,
-        IReadOnlyList<SessionMembership> Memberships, bool IsPlatformAdmin);
+        SessionUser User, SessionOrganization? Org, string? Role, string Status,
+        IReadOnlyList<SessionMembership> Memberships, bool IsPlatformAdmin, string CsrfToken);
 }

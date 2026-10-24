@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, setToken, getToken, ApiError } from "@/lib/api";
+import { api, setCsrfToken, ApiError } from "@/lib/api";
 import { hasPermission } from "@/lib/permissions";
 import { queryClient } from "@/lib/queryClient";
 import type { AccessStatus, AppRole, Membership, Organization, Permission, User } from "@/types/db";
@@ -39,8 +39,9 @@ interface SessionPayload {
   is_platform_admin?: boolean;
   role: AppRole | null;
   status: AccessStatus;
+  /** Held in memory only; echoed on every state-changing request. See lib/api.ts. */
+  csrf_token?: string;
 }
-interface AuthPayload extends SessionPayload { token: string }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -53,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [serverDown, setServerDown] = useState(false);
 
   function applySession(s: SessionPayload) {
+    setCsrfToken(s.csrf_token ?? null);
     setUser(s.user);
     setOrg(s.org);
     setMemberships(s.memberships ?? []);
@@ -68,21 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!getToken()) {
-        // No session yet — still ping the API so we can detect a stopped server.
-        try {
-          await api.get("/auth/me");
-        } catch (e) {
-          if (!cancelled && !(e instanceof ApiError)) setServerDown(true);
-        }
-        if (!cancelled) setLoading(false);
-        return;
-      }
+      // The session is a cookie the page cannot see, so the only way to know
+      // whether there is one is to ask. A 401 simply means "not signed in";
+      // anything that is not an API answer means the server is not there.
       try {
         if (!cancelled) await loadMe();
       } catch (e) {
-        if (e instanceof ApiError) setToken(null); // expired/invalid session
-        else if (!cancelled) setServerDown(true);
+        if (!(e instanceof ApiError) && !cancelled) setServerDown(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -92,9 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function authenticate(path: string, body: Record<string, string>) {
     try {
-      const { token, ...session } = await api.post<AuthPayload>(path, body);
-      setToken(token);
-      applySession(session);
+      applySession(await api.post<SessionPayload>(path, body));
       setServerDown(false);
       return { error: null };
     } catch (e) {
@@ -153,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     async signOut() {
       try { await api.post("/auth/logout"); } catch { /* token may already be gone */ }
-      setToken(null);
+      setCsrfToken(null);
       setUser(null);
       setOrg(null);
       setMemberships([]);

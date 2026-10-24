@@ -40,6 +40,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
 });
 
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<ExternalIdentityService>();
 builder.Services.AddScoped<ApiKeyService>();
@@ -240,6 +241,34 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthentication();
+
+// Cookies are sent ambiently, so on their own they would let any other site
+// make a signed-in member's browser perform actions. Every state-changing
+// request authenticated by the session cookie must therefore also present the
+// CSRF token (a hash of the session that page script is given but another site
+// cannot obtain or forge). Safe methods are exempt, as are API keys, which
+// authenticate per request and carry no cookie, and anonymous routes such as
+// sign-in, which have no session to ride on.
+app.Use(async (context, next) =>
+{
+    var method = context.Request.Method;
+    var needsCheck = !(HttpMethods.IsGet(method) || HttpMethods.IsHead(method)
+                       || HttpMethods.IsOptions(method) || HttpMethods.IsTrace(method));
+
+    if (needsCheck
+        && context.Request.Path.StartsWithSegments("/api")
+        && context.User.Identity?.AuthenticationType == LegacySessionAuthenticationDefaults.SchemeName
+        && context.User.FindFirst(LegacySessionAuthenticationDefaults.TokenClaimType)?.Value is { } rawToken
+        && !SessionTokens.CsrfMatches(rawToken, context.Request.Headers[SessionCookie.CsrfHeader].ToString()))
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        await context.Response.WriteAsJsonAsync(new { error = "CSRF validation failed" });
+        return;
+    }
+
+    await next();
+});
+
 app.UseAuthorization();
 
 app.MapAuthEndpoints();

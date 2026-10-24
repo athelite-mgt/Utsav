@@ -44,13 +44,15 @@ public sealed class LegacySessionAuthenticationHandler(
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        var header = Request.Headers.Authorization.ToString();
-        if (!header.StartsWith("Bearer ", StringComparison.Ordinal))
+        // The credential is the httpOnly cookie and nothing else. There is
+        // deliberately no bearer-header path for sessions: one way in, and the
+        // Authorization header is left to the API-key scheme.
+        var token = Request.Cookies[SessionCookie.Name];
+        if (string.IsNullOrEmpty(token))
         {
             return AuthenticateResult.NoResult();
         }
 
-        var token = header["Bearer ".Length..];
         var session = await sessions.LoadSessionAsync(token, Context.RequestAborted);
         if (session is null)
         {

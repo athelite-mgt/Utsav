@@ -1164,6 +1164,14 @@ public partial class UtsavDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("SYSUTCDATETIME()")
                 .HasColumnName("created_at");
+            // Defaults only cover rows written outside the service (seeding,
+            // sessions that pre-date expiry); the service always sets both.
+            entity.Property(e => e.ExpiresAt)
+                .HasDefaultValueSql("DATEADD(day, 30, SYSUTCDATETIME())")
+                .HasColumnName("expires_at");
+            entity.Property(e => e.LastSeenAt)
+                .HasDefaultValueSql("SYSUTCDATETIME()")
+                .HasColumnName("last_seen_at");
             entity.Property(e => e.OrgId).HasColumnName("org_id");
             entity.Property(e => e.UserId).HasColumnName("user_id");
 

@@ -6,7 +6,7 @@ import { FileText, Plus, Search, Download, Trash2, FileArchive } from "lucide-re
 import { useYear } from "@/context/YearContext";
 import { useAuth } from "@/context/AuthContext";
 import { useDocuments } from "@/hooks/useFinance";
-import { api, getToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import { fmtDate } from "@/lib/format";
 import { onInvalidFocus } from "@/lib/formErrors";
 import { cn } from "@/lib/utils";
@@ -34,10 +34,7 @@ function formatSize(bytes: number): string {
 }
 
 async function downloadDocument(doc: DocumentFile) {
-  const token = getToken();
-  const res = await fetch(`/api/documents/${doc.id}/download`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
+  const res = await fetch(`/api/documents/${doc.id}/download`);
   if (!res.ok) {
     toast.error("Download failed — the file may be missing from storage.");
     return;

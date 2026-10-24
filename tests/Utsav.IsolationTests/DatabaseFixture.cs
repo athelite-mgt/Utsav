@@ -4,8 +4,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Utsav.Api.Authentication;
 using Utsav.Domain.Authentication;
 using Utsav.Infrastructure.Audit;
+using Utsav.Infrastructure.Authentication;
 using Utsav.Infrastructure.Data;
 using Utsav.Infrastructure.Data.Entities;
 using Utsav.Infrastructure.Storage;
@@ -165,15 +167,42 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 .Options,
             tenant);
 
-    /// <summary>An HTTP client whose bearer token pins it to one committee.</summary>
+    /// <summary>
+    /// A session as the service stores it: the HASH of the token the browser
+    /// holds, with a live lifetime (these rows bypass the service, so the
+    /// lifetime the service would set has to be stated).
+    /// </summary>
+    public static Session Live(string rawToken, Guid userId, Guid? orgId) => new()
+    {
+        Token = SessionTokens.Hash(rawToken),
+        UserId = userId,
+        OrgId = orgId,
+        ExpiresAt = DateTime.UtcNow.AddDays(10),
+        LastSeenAt = DateTime.UtcNow,
+    };
+
+    /// <summary>
+    /// An HTTP client signed in the way a browser is: the session in its cookie,
+    /// plus the CSRF header the page would add. The cookie jar is switched off
+    /// so the Cookie header set here is the one that is sent.
+    /// </summary>
     public HttpClient ClientFor(string token)
     {
-        var client = _factory!.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        client.DefaultRequestHeaders.Add("Cookie", $"{SessionCookie.Name}={token}");
+        client.DefaultRequestHeaders.Add(SessionCookie.CsrfHeader, SessionTokens.CsrfFor(token));
         return client;
     }
 
-    public HttpClient AnonymousClient() => _factory!.CreateClient();
+    /// <summary>A client with the session cookie but NOT the CSRF header: a cross-site request.</summary>
+    public HttpClient ClientWithCookieOnly(string token)
+    {
+        var client = _factory!.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        client.DefaultRequestHeaders.Add("Cookie", $"{SessionCookie.Name}={token}");
+        return client;
+    }
+
+    public HttpClient AnonymousClient() => _factory!.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
     /// <summary>
     /// A brand-new account with its own memberships and a fresh session token.
@@ -197,7 +226,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
             identity.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = org, UserId = userId, Role = role, Status = status });
         }
 
-        identity.Sessions.Add(new Session { Token = token, UserId = userId, OrgId = pinnedTo });
+        identity.Sessions.Add(Live(token, userId, pinnedTo));
         await identity.SaveChangesAsync();
         return (userId, token);
     }
@@ -308,13 +337,13 @@ public sealed class DatabaseFixture : IAsyncLifetime
                 new OrgMember { Id = Guid.NewGuid(), OrgId = TenantC, UserId = UserC, Role = "admin", Status = "active" });
 
             identity.Sessions.AddRange(
-                new Session { Token = TokenForA, UserId = UserInBoth, OrgId = TenantA },
-                new Session { Token = TokenForB, UserId = UserInBoth, OrgId = TenantB },
-                new Session { Token = TokenUnpinned, UserId = UserInBoth, OrgId = null },
-                new Session { Token = TokenAOnly, UserId = UserInAOnly, OrgId = TenantA },
-                new Session { Token = TokenOutsider, UserId = UserOutsider, OrgId = null },
-                new Session { Token = TokenForC, UserId = UserC, OrgId = TenantC },
-                new Session { Token = TokenPlatform, UserId = UserPlatform, OrgId = null });
+                Live(TokenForA, UserInBoth, TenantA),
+                Live(TokenForB, UserInBoth, TenantB),
+                Live(TokenUnpinned, UserInBoth, null),
+                Live(TokenAOnly, UserInAOnly, TenantA),
+                Live(TokenOutsider, UserOutsider, null),
+                Live(TokenForC, UserC, TenantC),
+                Live(TokenPlatform, UserPlatform, null));
 
             await identity.SaveChangesAsync();
         }

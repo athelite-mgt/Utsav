@@ -1,4 +1,4 @@
-import { getToken } from "@/lib/api";
+import { authHeaders } from "@/lib/api";
 
 export interface AsuraTile {
   key: string;
@@ -62,13 +62,12 @@ export async function askAsura(
   onEvent: (e: AsuraEvent) => void,
   signal: AbortSignal,
 ): Promise<void> {
-  const token = getToken();
   const response = await fetch("/api/asura/ask", {
     method: "POST",
     signal,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...authHeaders("POST"),
     },
     body: JSON.stringify({ question }),
   });
@@ -133,12 +132,11 @@ export async function drillAsura(
   value_columns: string[];
   drill: { tool_id: string; param_name: string; from_column: string } | null;
 }> {
-  const token = getToken();
   const response = await fetch("/api/asura/drill", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...authHeaders("POST"),
     },
     // tool_id, not toolId: the API binds request bodies with the same
     // SnakeCaseLower policy it serializes responses with (Program.cs), and
@@ -171,12 +169,11 @@ export async function exportAsura(
   params: Record<string, string>,
   question: string,
 ): Promise<void> {
-  const token = getToken();
   const response = await fetch("/api/asura/export", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...authHeaders("POST"),
     },
     // tool_id — see the matching note in drillAsura above. This is the exact
     // bug behind "PDF and Excel download is not working": every export POST

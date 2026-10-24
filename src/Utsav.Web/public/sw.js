@@ -6,7 +6,7 @@
 // Bumped when the shell's assets change materially (v2: Athelite branding
 // and app icons) — the activate handler drops every cache but this one, so
 // already-installed clients pick the new artwork up on next launch.
-const CACHE = "puja-finance-shell-v2";
+const CACHE = "utsav-shell-v1";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

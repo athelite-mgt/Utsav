@@ -1,12 +1,27 @@
 /**
- * Thin fetch wrapper for the local Express + SQLite API.
- * Auth is a bearer token kept in localStorage.
+ * Thin fetch wrapper for the API.
+ *
+ * Auth is an httpOnly cookie the server sets: there is deliberately no token
+ * here for any script to read, store or leak, so a cross-site-scripting bug
+ * cannot be turned into a stolen session. What the page does hold, in memory
+ * only, is the CSRF token the server hands back on sign-in and on /auth/me.
+ * Cookies are sent automatically, which is exactly why every state-changing
+ * request has to prove it came from this page by echoing that token in a
+ * header another site cannot add.
  */
-const TOKEN_KEY = "puja-token";
+let csrfToken: string | null = null;
 
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (t: string | null) =>
-  t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
+export const setCsrfToken = (token: string | null) => {
+  csrfToken = token;
+};
+
+const CSRF_HEADER = "X-Utsav-Csrf";
+
+/** Headers for any request the app makes itself, including the ones that do not go through request(). */
+export function authHeaders(method = "GET"): Record<string, string> {
+  const safe = method === "GET" || method === "HEAD" || method === "OPTIONS";
+  return !safe && csrfToken ? { [CSRF_HEADER]: csrfToken } : {};
+}
 
 export class ApiError extends Error {
   status: number;
@@ -53,7 +68,6 @@ function release() {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = getToken();
   await acquire();
   let res: Response;
   try {
@@ -61,7 +75,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       method,
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...authHeaders(method),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -93,13 +107,12 @@ export function qs(params: Record<string, string | number | null | undefined>) {
 
 /** Multipart upload — no JSON here, so it bypasses request()'s Content-Type/body handling entirely. */
 async function upload<T>(path: string, form: FormData): Promise<T> {
-  const token = getToken();
   await acquire();
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: authHeaders("POST"),
       body: form,
     });
   } finally {

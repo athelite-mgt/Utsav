@@ -11,6 +11,19 @@ public class SessionTenantResolutionTests
     private static UtsavDbContext InMemory(string name) =>
         new(new DbContextOptionsBuilder<UtsavDbContext>().UseInMemoryDatabase(name).Options);
 
+    /// <summary>
+    /// A session that has not expired. The in-memory provider does not apply the
+    /// column defaults SQL Server does, so the lifetime has to be stated here.
+    /// </summary>
+    private static Session Live(string rawToken, Guid userId, Guid? orgId) => new()
+    {
+        Token = SessionTokens.Hash(rawToken),
+        UserId = userId,
+        OrgId = orgId,
+        ExpiresAt = DateTime.UtcNow.AddDays(10),
+        LastSeenAt = DateTime.UtcNow,
+    };
+
     private static async Task<(UtsavDbContext Db, Guid UserId, Guid OrgA, Guid OrgB)> SeedAsync(string name)
     {
         var db = InMemory(name);
@@ -31,7 +44,7 @@ public class SessionTenantResolutionTests
         var (db, userId, orgA, orgB) = await SeedAsync(nameof(Session_with_null_org_resolves_no_tenant_but_lists_memberships));
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgA, UserId = userId, Role = "admin", Status = "active" });
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgB, UserId = userId, Role = "viewer", Status = "active" });
-        db.Sessions.Add(new Session { Token = "t1", UserId = userId, OrgId = null });
+        db.Sessions.Add(Live("t1", userId, null));
         await db.SaveChangesAsync();
 
         var session = await new SessionService(db).LoadSessionAsync("t1");
@@ -47,7 +60,7 @@ public class SessionTenantResolutionTests
     {
         var (db, userId, orgA, _) = await SeedAsync(nameof(Session_pinned_to_an_org_resolves_that_org_and_its_role));
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgA, UserId = userId, Role = "finance", Status = "active" });
-        db.Sessions.Add(new Session { Token = "t2", UserId = userId, OrgId = orgA });
+        db.Sessions.Add(Live("t2", userId, orgA));
         await db.SaveChangesAsync();
 
         var session = await new SessionService(db).LoadSessionAsync("t2");
@@ -64,7 +77,7 @@ public class SessionTenantResolutionTests
         var (db, userId, orgA, _) = await SeedAsync(nameof(Membership_revoked_after_sign_in_stops_working_immediately));
         var member = new OrgMember { Id = Guid.NewGuid(), OrgId = orgA, UserId = userId, Role = "admin", Status = "active" };
         db.OrgMembers.Add(member);
-        db.Sessions.Add(new Session { Token = "t3", UserId = userId, OrgId = orgA });
+        db.Sessions.Add(Live("t3", userId, orgA));
         await db.SaveChangesAsync();
 
         db.OrgMembers.Remove(member);
@@ -83,7 +96,7 @@ public class SessionTenantResolutionTests
     {
         var (db, userId, orgA, _) = await SeedAsync(nameof(Session_pinned_to_an_org_the_user_only_has_pending_access_to_is_not_active));
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgA, UserId = userId, Role = "viewer", Status = "pending" });
-        db.Sessions.Add(new Session { Token = "t4", UserId = userId, OrgId = orgA });
+        db.Sessions.Add(Live("t4", userId, orgA));
         await db.SaveChangesAsync();
 
         var session = await new SessionService(db).LoadSessionAsync("t4");
@@ -97,14 +110,14 @@ public class SessionTenantResolutionTests
     {
         var (db, userId, orgA, orgB) = await SeedAsync(nameof(SwitchOrg_refuses_an_org_the_user_is_not_an_active_member_of));
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgA, UserId = userId, Role = "admin", Status = "active" });
-        db.Sessions.Add(new Session { Token = "t5", UserId = userId, OrgId = orgA });
+        db.Sessions.Add(Live("t5", userId, orgA));
         await db.SaveChangesAsync();
         var sessions = new SessionService(db);
 
         // No membership in orgB at all: the switch must be refused and the
         // session must stay pinned where it was.
         Assert.False(await sessions.SwitchOrgAsync(userId, orgB, "t5"));
-        Assert.Equal(orgA, (await db.Sessions.SingleAsync(s => s.Token == "t5")).OrgId);
+        Assert.Equal(orgA, (await db.Sessions.SingleAsync(s => s.Token == SessionTokens.Hash("t5"))).OrgId);
     }
 
     [Fact]
@@ -113,11 +126,11 @@ public class SessionTenantResolutionTests
         var (db, userId, orgA, orgB) = await SeedAsync(nameof(SwitchOrg_moves_the_session_to_an_org_the_user_belongs_to));
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgA, UserId = userId, Role = "admin", Status = "active" });
         db.OrgMembers.Add(new OrgMember { Id = Guid.NewGuid(), OrgId = orgB, UserId = userId, Role = "viewer", Status = "active" });
-        db.Sessions.Add(new Session { Token = "t6", UserId = userId, OrgId = orgA });
+        db.Sessions.Add(Live("t6", userId, orgA));
         await db.SaveChangesAsync();
 
         Assert.True(await new SessionService(db).SwitchOrgAsync(userId, orgB, "t6"));
-        Assert.Equal(orgB, (await db.Sessions.SingleAsync(s => s.Token == "t6")).OrgId);
+        Assert.Equal(orgB, (await db.Sessions.SingleAsync(s => s.Token == SessionTokens.Hash("t6"))).OrgId);
     }
 
     [Fact]
@@ -131,7 +144,7 @@ public class SessionTenantResolutionTests
 
         var token = await new SessionService(db).CreateSessionAsync(userId);
 
-        Assert.Equal(orgA, (await db.Sessions.SingleAsync(s => s.Token == token)).OrgId);
+        Assert.Equal(orgA, (await db.Sessions.SingleAsync(s => s.Token == SessionTokens.Hash(token))).OrgId);
     }
 
     [Fact]
@@ -144,6 +157,6 @@ public class SessionTenantResolutionTests
 
         var token = await new SessionService(db).CreateSessionAsync(userId);
 
-        Assert.Null((await db.Sessions.SingleAsync(s => s.Token == token)).OrgId);
+        Assert.Null((await db.Sessions.SingleAsync(s => s.Token == SessionTokens.Hash(token))).OrgId);
     }
 }

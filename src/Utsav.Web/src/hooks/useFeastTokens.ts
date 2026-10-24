@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, getToken, qs } from "@/lib/api";
+import { api, authHeaders, qs } from "@/lib/api";
 import type { FeastToken, FeastTokenSummary } from "@/types/db";
 
 const KEY = "feast_tokens";
@@ -27,12 +27,11 @@ export const useFeastTokenSummary = (yearId?: string | null) =>
  * so there's no single shared return shape to cache against.
  */
 export async function printFeastTokens(yearId: string, count: number): Promise<void> {
-  const token = getToken();
   const response = await fetch("/api/feast_tokens/print", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...authHeaders("POST"),
     },
     body: JSON.stringify({ year_id: yearId, count }),
   });

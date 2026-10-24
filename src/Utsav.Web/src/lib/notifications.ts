@@ -7,7 +7,7 @@ import type { NotificationItem } from "@/types/db";
  * person opened the page. The stored value is the timestamp of the newest
  * notification the user has seen; anything newer counts as unread.
  */
-const KEY = "puja-notifications-seen";
+const KEY = "utsav-notifications-seen";
 
 export function getLastSeen(): number {
   const raw = localStorage.getItem(KEY);

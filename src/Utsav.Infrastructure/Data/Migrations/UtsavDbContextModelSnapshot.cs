@@ -2019,6 +2019,18 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTime>("ExpiresAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("expires_at")
+                        .HasDefaultValueSql("DATEADD(day, 30, SYSUTCDATETIME())");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime2")
+                        .HasColumnName("last_seen_at")
+                        .HasDefaultValueSql("SYSUTCDATETIME()");
+
                     b.Property<Guid?>("OrgId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("org_id");

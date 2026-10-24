@@ -17,8 +17,8 @@ interface ThemeCtx {
   setScheme: (s: Scheme) => void;
 }
 const Ctx = createContext<ThemeCtx | undefined>(undefined);
-const MODE_KEY = "puja-theme";
-const SCHEME_KEY = "puja-scheme";
+const MODE_KEY = "utsav-theme";
+const SCHEME_KEY = "utsav-scheme";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Light + Ocean Blue is the fixed default for anyone without a saved
