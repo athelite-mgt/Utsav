@@ -166,7 +166,7 @@ internal static class AsuraExport
 
                 page.Footer().AlignRight().Text(t =>
                 {
-                    t.Span("Puja Finance · Asura · ").FontSize(7).FontColor(Colors.Grey.Darken1);
+                    t.Span("Utsav · Asura · ").FontSize(7).FontColor(Colors.Grey.Darken1);
                     t.CurrentPageNumber().FontSize(7);
                     t.Span(" / ").FontSize(7);
                     t.TotalPages().FontSize(7);

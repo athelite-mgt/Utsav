@@ -296,6 +296,6 @@ internal sealed class AsuraProviderOptions
     /// request from 403 to 200 in 0.38s.
     /// </para>
     /// </summary>
-    public string UserAgent { get; set; } = "Asura/1.0 (+Puja Finance)";
+    public string UserAgent { get; set; } = "Asura/1.0 (+Utsav)";
 }
 

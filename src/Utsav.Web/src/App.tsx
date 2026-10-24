@@ -43,7 +43,7 @@ function FullScreenLoader() {
       <AppLogoTile className="h-14 w-14" />
       <span className="flex items-center gap-2 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        Loading Puja Finance…
+        Loading Utsav…
       </span>
     </div>
   );

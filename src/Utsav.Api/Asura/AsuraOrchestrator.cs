@@ -226,7 +226,7 @@ internal sealed partial class AsuraOrchestrator(
     {
         // $$ so the JSON braces below are literal and only {{...}} interpolates.
         var system = $$"""
-            You choose which pre-written report answers a question about a Durga Puja
+            You choose which pre-written report answers a question about a puja
             committee's finances. You do not write SQL.
 
             Available reports:
@@ -290,7 +290,7 @@ internal sealed partial class AsuraOrchestrator(
             string.Join(" | ", query.Columns.Select(c => $"{c}={Format(r.GetValueOrDefault(c))}"))));
 
         var system = """
-            You are a treasurer's assistant for a Durga Puja committee. You are given the
+            You are a treasurer's assistant for a puja committee. You are given the
             result of a database report. Write 2-3 short sentences stating what it shows,
             in plain English, naming the most important figures.
 

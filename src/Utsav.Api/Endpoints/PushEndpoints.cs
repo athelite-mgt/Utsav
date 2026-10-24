@@ -117,7 +117,7 @@ public static class PushEndpoints
 
         var payload = JsonSerializer.Serialize(new
         {
-            title = "Puja Finance",
+            title = "Utsav",
             body = "Test notification — if you can see this, it works.",
             url = "/",
         });

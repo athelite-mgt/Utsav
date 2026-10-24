@@ -202,6 +202,25 @@ public class ProvisioningTests(DatabaseFixture fixture)
         Assert.All(entries, e => Assert.DoesNotContain(code, JsonSerializer.Serialize(e), StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public async Task Rolling_a_kali_committee_over_names_the_new_year_in_its_own_words()
+    {
+        // The old behaviour named every committee's next year after one festival.
+        var (orgId, _, _) = await ProvisionAsync("Rollover Kali Committee", "kali", "roll@test.local");
+        var (_, token) = await fixture.NewMemberAsync("roll", [(orgId, "admin", "active")], pinnedTo: orgId);
+        using var client = fixture.ClientFor(token);
+
+        var years = await JsonAsync(await client.GetAsync("/api/puja_years"));
+        var sourceYear = years[0].GetProperty("id").GetGuid();
+
+        var response = await client.PostAsJsonAsync($"/api/puja_years/{sourceYear}/rollover", new { year = 2027 });
+        Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+
+        await using var db = fixture.ContextFor(orgId);
+        var names = await db.PujaYears.OrderBy(y => y.Year).Select(y => y.Name).ToListAsync();
+        Assert.Equal(["Kali Puja 2026", "Kali Puja 2027"], names);
+    }
+
     // ---- re-issuing a lost code ----------------------------------------
 
     private async Task<HttpResponseMessage> ReissueAsync(string token, Guid orgId, string email)

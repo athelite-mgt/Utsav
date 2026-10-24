@@ -54,7 +54,7 @@ self.addEventListener("push", (event) => {
     data = { body: event.data ? event.data.text() : "" };
   }
 
-  const title = data.title || "Puja Finance";
+  const title = data.title || "Utsav";
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",

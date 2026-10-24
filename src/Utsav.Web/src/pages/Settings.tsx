@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { api, qs } from "@/lib/api";
 import { parseHex } from "@/lib/brand";
+import { nextYearName } from "@/lib/yearName";
 import { CommitteeAvatar } from "@/components/brand/CommitteeAvatar";
 import { useAuth } from "@/context/AuthContext";
 import { useEntityMutations } from "@/hooks/useEntityMutations";
@@ -71,7 +72,7 @@ function RolloverDialog({
   const { register, handleSubmit, reset } = useForm<RolloverForm>({
     defaultValues: {
       year: sourceYear.year + 1,
-      name: `Durga Puja ${sourceYear.year + 1}`,
+      name: nextYearName(sourceYear.name, sourceYear.year + 1),
       target: sourceYear.target,
       projection_pct: sourceYear.projection_pct,
     },
@@ -80,7 +81,7 @@ function RolloverDialog({
   useEffect(() => {
     reset({
       year: sourceYear.year + 1,
-      name: `Durga Puja ${sourceYear.year + 1}`,
+      name: nextYearName(sourceYear.name, sourceYear.year + 1),
       target: sourceYear.target,
       projection_pct: sourceYear.projection_pct,
     });

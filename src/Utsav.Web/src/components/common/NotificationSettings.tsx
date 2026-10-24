@@ -12,7 +12,7 @@ type State = "checking" | "unsupported" | "needs-install" | "blocked" | "off" | 
 const COPY: Record<State, string> = {
   checking: "",
   unsupported: "This browser doesn't support push notifications.",
-  "needs-install": "Add Puja Finance to your home screen first — iOS only allows notifications for installed apps.",
+  "needs-install": "Add Utsav to your home screen first — iOS only allows notifications for installed apps.",
   blocked: "Blocked in this browser's site settings — turn it back on there to re-enable.",
   off: "Get notified when a collection, expense, advance or contract changes.",
   on: "You'll be notified about transaction updates on this device.",

@@ -295,7 +295,7 @@ public static class AuditReportEndpoint
 
         return new AuditReportDto(
             orgName,
-            yearName is { Length: > 0 } ? yearName : $"Durga Puja {yearNum}",
+            yearName is { Length: > 0 } ? yearName : Convert.ToInt32(yearNum).ToString(),
             Convert.ToInt32(yearNum),
             new BalanceDto(openingCash, openingBank, openingCash + openingBank),
             new BalanceDto(closingCash, closingBank, closingTotal),

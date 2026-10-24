@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, Copy, KeyRound, LogOut, Plus } from "lucide-react";
@@ -39,9 +39,14 @@ export function PlatformConsole() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [city, setCity] = useState("");
-  const [festival, setFestival] = useState("durga");
+  const [festival, setFestival] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [email, setEmail] = useState("");
+  // Nothing is assumed: the operator chooses from what the server offers, and the
+  // first is only pre-selected so the form is usable straight away.
+  useEffect(() => {
+    if (!festival && festivals.data?.length) setFestival(festivals.data[0].id);
+  }, [festival, festivals.data]);
   const [created, setCreated] = useState<{ committee: CreatedCommittee; email: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -169,7 +174,7 @@ export function PlatformConsole() {
             <div className="space-y-1.5">
               <Label htmlFor="pc-festival">Festival</Label>
               <select id="pc-festival" className={selectClass} value={festival} onChange={(e) => setFestival(e.target.value)}>
-                {(festivals.data ?? [{ id: "durga", name: "Durga Puja" }]).map((f) => (
+                {(festivals.data ?? []).map((f) => (
                   <option key={f.id} value={f.id}>{f.name}</option>
                 ))}
               </select>
@@ -184,7 +189,7 @@ export function PlatformConsole() {
                 placeholder="secretary@example.org" />
             </div>
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={create.isPending || !name.trim() || !email.trim()}>
+              <Button type="submit" disabled={create.isPending || !name.trim() || !email.trim() || !festival}>
                 <Plus /> {create.isPending ? "Creating…" : "Create committee"}
               </Button>
             </div>

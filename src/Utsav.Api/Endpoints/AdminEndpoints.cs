@@ -204,7 +204,7 @@ public static class AdminEndpoints
         var projectionPct = body.TryGetProperty("projection_pct", out var pct) && pct.ValueKind == JsonValueKind.Number
             ? pct.GetDecimal()
             : Convert.ToDecimal(source["projection_pct"]);
-        var name = TryString(body, "name", out var n) ? n : $"Durga Puja {year}";
+        var name = TryString(body, "name", out var n) ? n : Utsav.Domain.Finance.YearNaming.Next(source["name"] as string, year);
         var target = body.TryGetProperty("target", out var t) && t.ValueKind == JsonValueKind.Number
             ? t.GetDecimal()
             : source["target"] is decimal existing ? existing : 0m;

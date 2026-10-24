@@ -15,7 +15,7 @@ function IosSteps({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boo
   const steps = [
     { icon: Share, text: "Tap the Share button in Safari's toolbar" },
     { icon: Plus, text: 'Scroll down and choose "Add to Home Screen"' },
-    { icon: Check, text: 'Tap "Add" — Puja Finance appears on your home screen' },
+    { icon: Check, text: 'Tap "Add" — Utsav appears on your home screen' },
   ];
 
   return (
@@ -61,7 +61,7 @@ export function InstallPrompt() {
   async function install() {
     if (canPrompt) {
       const accepted = await promptInstall();
-      if (accepted) toast.success("Installing — look for Puja Finance on your home screen");
+      if (accepted) toast.success("Installing — look for Utsav on your home screen");
       else dismissInstall();
       return;
     }
@@ -78,7 +78,7 @@ export function InstallPrompt() {
         <div className="animate-rise mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-lg">
           <AppLogoTile className="h-11 w-11 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold leading-tight">Install Puja Finance</p>
+            <p className="text-sm font-semibold leading-tight">Install Utsav</p>
             <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
               {needsManualSteps
                 ? "Add it to your home screen for one-tap access."
@@ -126,7 +126,7 @@ export function InstallSettingsRow() {
               {standalone
                 ? "Already installed — you're using the app version."
                 : possible
-                  ? "Add Puja Finance to your home screen for one-tap access."
+                  ? "Add Utsav to your home screen for one-tap access."
                   : "Open this page in Chrome or Safari on your phone to install it."}
             </p>
           </div>
@@ -139,7 +139,7 @@ export function InstallSettingsRow() {
               resetInstallDismissal();
               if (canPrompt) {
                 const accepted = await promptInstall();
-                if (accepted) toast.success("Installing — look for Puja Finance on your home screen");
+                if (accepted) toast.success("Installing — look for Utsav on your home screen");
               } else {
                 setShowSteps(true);
               }

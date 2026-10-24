@@ -64,12 +64,12 @@ export function Login() {
           <header className="animate-rise text-center" style={rise(0)}>
             <AppLogoTile className="mx-auto h-16 w-16 shadow-card" />
             <h1 className="mt-6 font-display text-[1.75rem] font-bold leading-tight tracking-tight sm:text-3xl">
-              {signingUp ? "Join your committee" : "Puja Finance"}
+              {signingUp ? "Join your committee" : "Utsav"}
             </h1>
             <p className="mx-auto mt-2 max-w-[22rem] text-[15px] leading-relaxed text-muted-foreground">
               {signingUp
                 ? "Create an account and an admin will approve your access."
-                : "Collections, expenses and budget for your Durga Puja committee."}
+                : "Collections, expenses and budget for your puja committee."}
             </p>
           </header>
 

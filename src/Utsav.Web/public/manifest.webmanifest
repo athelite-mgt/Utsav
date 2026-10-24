@@ -1,7 +1,7 @@
 {
-  "name": "Puja Finance — Durga Puja Manager",
-  "short_name": "Puja Finance",
-  "description": "Collections, expenses & budget for your Durga Puja committee — powered by Athelite",
+  "name": "Utsav — Puja Committee Manager",
+  "short_name": "Utsav",
+  "description": "Collections, expenses & budget for your puja committee — powered by Athelite",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
