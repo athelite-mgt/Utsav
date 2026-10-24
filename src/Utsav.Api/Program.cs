@@ -244,6 +244,7 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapPlatformEndpoints();
+app.MapBrandingEndpoints();
 app.MapReferenceEndpoints();
 app.MapModuleEndpoints();
 app.MapFundPositionEndpoint();

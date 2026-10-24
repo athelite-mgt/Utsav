@@ -86,13 +86,18 @@ public sealed class SessionService(UtsavDbContext db)
 
         var user = new SessionUser(row.User.Id, row.User.Email, row.User.FullName, row.User.AuthProvider);
 
-        var memberships = await (
+        var membershipRows = await (
             from m in db.OrgMembers
             join o in db.Organizations on m.OrgId equals o.Id
             where m.UserId == row.User.Id && o.IsActive
             orderby o.Name
-            select new SessionMembership(o.Id, o.Name, o.Slug, o.LogoUrl, o.AccentColour, m.Role, m.Status)
+            select new { o.Id, o.Name, o.Slug, o.LogoBlob, o.AccentColour, m.Role, m.Status }
         ).ToListAsync(ct);
+
+        var memberships = membershipRows
+            .Select(m => new SessionMembership(
+                m.Id, m.Name, m.Slug, BrandingUrls.LogoUrl(m.Id, m.LogoBlob), m.AccentColour, m.Role, m.Status))
+            .ToList();
 
         if (row.OrgId is null)
         {

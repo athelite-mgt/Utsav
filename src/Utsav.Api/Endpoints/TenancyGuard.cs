@@ -59,6 +59,17 @@ public static class TenancyGuard
         @"\[?org_id\]?\s*=\s*@org\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+    /// <summary>
+    /// The one table with no org_id of its own: a committee's row IS the
+    /// committee, so its id is the tenant. A statement that changes it without
+    /// naming the caller's committee would change every committee's row.
+    /// </summary>
+    private const string RootTable = "organizations";
+
+    private static readonly Regex RootPredicate = new(
+        @"\[?\bid\b\]?\s*=\s*@org\b",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly Regex OrgColumn = new(@"\[?org_id\]?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex OrgParameter = new(@"@org\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -72,6 +83,8 @@ public static class TenancyGuard
     public static void AssertScoped(string sql, IEnumerable<string> parameterNames)
     {
         var clean = Sanitise(sql);
+        AssertRootTableScoped(clean);
+
         var scoped = ReferencedOrgScopedTables(sql);
         if (scoped.Count == 0)
         {
@@ -100,6 +113,26 @@ public static class TenancyGuard
                 ? "The @org parameter is present but the statement does not constrain on it."
                 : "No @org parameter was supplied.") +
             " Add the predicate, or query a global table instead.");
+    }
+
+    private static void AssertRootTableScoped(string clean)
+    {
+        var trimmed = clean.TrimStart();
+        var mutates = trimmed.StartsWith("UPDATE", StringComparison.OrdinalIgnoreCase)
+                      || trimmed.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase);
+        if (!mutates)
+        {
+            return;
+        }
+
+        var touchesRoot = TableReference.Matches(clean)
+            .Any(m => string.Equals(m.Groups["table"].Value, RootTable, StringComparison.OrdinalIgnoreCase));
+        if (touchesRoot && !RootPredicate.IsMatch(clean))
+        {
+            throw new TenancyViolationException(
+                "Statement changes the organizations table without `id=@org`, which would affect every committee. " +
+                "Constrain it to the caller's own committee.");
+        }
     }
 
     /// <summary>

@@ -79,7 +79,11 @@ export function BrandMark({ compact }: { compact?: boolean }) {
 
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <AppLogoTile className="h-9 w-9" />
+      {org?.logo_url ? (
+        <img src={org.logo_url} alt="" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <AppLogoTile className="h-9 w-9" />
+      )}
       {!compact && (
         <div className="min-w-0 leading-tight">
           <p className="truncate font-display text-sm font-bold tracking-tight">{org?.name ?? "Utsav"}</p>

@@ -98,7 +98,7 @@ public partial class UtsavDbContext
 
         modelBuilder.Entity<Organization>(entity =>
         {
-            entity.Property(e => e.LogoUrl).HasColumnName("logo_url").HasMaxLength(1024);
+            entity.Property(e => e.LogoBlob).HasColumnName("logo_blob").HasMaxLength(1024);
             entity.Property(e => e.AccentColour).HasColumnName("accent_colour").HasMaxLength(7);
         });
 

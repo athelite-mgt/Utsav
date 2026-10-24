@@ -106,17 +106,66 @@ public static class AdminEndpoints
         return Results.Ok(updated.FirstOrDefault());
     }
 
+    /// <summary>
+    /// Changes the committee's own name and/or brand colour. Each is optional,
+    /// so renaming does not need a colour and vice versa; the committee being
+    /// changed is always the caller's own.
+    /// </summary>
     private static async Task<IResult> RenameCommitteeAsync(JsonElement body, UtsavDbContext db, CancellationToken ct)
     {
-        if (!TryString(body, "name", out var name))
+        var assignments = new List<string>();
+        var parameters = new List<System.Data.Common.DbParameter>();
+
+        if (body.ValueKind == JsonValueKind.Object && body.TryGetProperty("name", out _))
         {
-            return Results.Json(new { error = "Committee name is required" }, statusCode: 400);
+            if (!TryString(body, "name", out var name) || name.Trim().Length > 120)
+            {
+                return Results.Json(new { error = "Committee name is required (up to 120 characters)" }, statusCode: 400);
+            }
+
+            assignments.Add("name=@name");
+            parameters.Add(P("@name", name.Trim()));
         }
 
-        await DynamicSql.ExecuteAsync(db, "UPDATE organizations SET name=@name WHERE id=@org", [P("@name", name.Trim()), Org(db)], ct);
+        if (body.ValueKind == JsonValueKind.Object && body.TryGetProperty("accent_colour", out var accent))
+        {
+            string? colour = accent.ValueKind switch
+            {
+                JsonValueKind.Null => null,
+                JsonValueKind.String => accent.GetString(),
+                _ => "invalid",
+            };
 
-        var org = await QueryAsync(db, "SELECT id, name, slug FROM organizations WHERE id=@org", [Org(db)], ct);
-        return Results.Ok(org.FirstOrDefault());
+            if (!BrandingValidation.IsValidAccentColour(colour))
+            {
+                return Results.Json(new { error = "accent_colour must be a hex colour such as #b45309" }, statusCode: 400);
+            }
+
+            assignments.Add("accent_colour=@accent");
+            parameters.Add(P("@accent", (object?)BrandingValidation.NormaliseAccentColour(colour) ?? DBNull.Value));
+        }
+
+        if (assignments.Count == 0)
+        {
+            return Results.Json(new { error = "Nothing to update" }, statusCode: 400);
+        }
+
+        parameters.Add(Org(db));
+        await DynamicSql.ExecuteAsync(db, $"UPDATE organizations SET {string.Join(", ", assignments)} WHERE id=@org", parameters, ct);
+
+        var org = await db.Organizations.AsNoTracking()
+            .Where(o => o.Id == db.TenantId)
+            .Select(o => new { o.Id, o.Name, o.Slug, o.AccentColour, o.LogoBlob })
+            .SingleAsync(ct);
+
+        return Results.Ok(new
+        {
+            id = org.Id,
+            name = org.Name,
+            slug = org.Slug,
+            accent_colour = org.AccentColour,
+            logo_url = BrandingUrls.LogoUrl(org.Id, org.LogoBlob),
+        });
     }
 
     /// <summary>

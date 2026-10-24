@@ -17,8 +17,13 @@ public partial class Organization
 
     public bool IsActive { get; set; }
 
-    /// <summary>Committee logo, a tenant-prefixed blob URL. Null falls back to an initial.</summary>
-    public string? LogoUrl { get; set; }
+    /// <summary>
+    /// The logo's blob name, always under this committee's own
+    /// <c>{orgId}/branding/</c> prefix. Null falls back to an initial. What the
+    /// client sees is a public URL derived from this (see BrandingUrls), never
+    /// the blob name itself.
+    /// </summary>
+    public string? LogoBlob { get; set; }
 
     /// <summary>Brand colour as a #rgb or #rrggbb hex literal, validated on write.</summary>
     public string? AccentColour { get; set; }

@@ -8,17 +8,34 @@ for the design and `docs/superpowers/plans/` for the implementation plan.
 
 ## Local development
 
-The local SQL Server password lives in a git-ignored `.env` at the repo root
-(`MSSQL_SA_PASSWORD=...`). Load it into your shell, then:
+Local services (SQL Server and the Azure Storage emulator) come from Docker; the
+SQL Server password lives in a git-ignored `.env` at the repo root
+(`MSSQL_SA_PASSWORD=...`, `UTSAV_APP_PASSWORD=...`). Load it into your shell, then:
 
     set -a; . ./.env; set +a
+    docker compose -f docker-compose.dev.yml up -d --wait   # SQL Server 2022 + Azurite
+
+    # 1. Create the schema (runs as sa; the migrations create the security policy):
     export ConnectionStrings__AzureSql="Server=localhost,1433;Database=utsav_dev;User Id=sa;Password=$MSSQL_SA_PASSWORD;TrustServerCertificate=True"
-    docker compose -f docker-compose.dev.yml up -d --wait   # SQL Server 2022
     dotnet ef database update -p src/Utsav.Infrastructure -s src/Utsav.Api
-    # Run the app as the least-privilege login, never sa (see "Database principals"):
+
+    # 2. One-off: create the least-privilege login the app runs as (see "Database principals").
+
+    # 3. Run the app as that login, never as sa. Audit goes to the log and uploads
+    #    go to the emulator, so no Azure account is needed:
     export ConnectionStrings__AzureSql="Server=localhost,1433;Database=utsav_dev;User Id=utsav_app;Password=$UTSAV_APP_PASSWORD;TrustServerCertificate=True"
-    ASPNETCORE_URLS=http://localhost:5174 dotnet run --project src/Utsav.Api
-    cd src/Utsav.Web && npm install && npm run dev           # Vite on :5173, proxies /api to :5174
+    export Audit__Mode=Log Storage__ConnectionString="UseDevelopmentStorage=true" Storage__ContainerName=utsav-dev
+    ASPNETCORE_URLS=http://localhost:5174 dotnet run --project src/Utsav.Api --no-launch-profile
+
+    # 4. The web app (Vite on :5173, proxying /api to :5174):
+    cd src/Utsav.Web && npm install && npm run dev
+
+`Audit__Mode=Log` is an explicit opt-in. The default is Cosmos, and a deployment
+missing its Cosmos configuration refuses to start rather than run without an
+audit trail.
+
+The first platform operator is whoever `Platform__BootstrapAdminEmail` names (an
+account that already exists); it is inert once any operator exists.
 
 ## Database principals
 
@@ -40,4 +57,5 @@ database by hand.
 ## Tests
 
     dotnet test tests/Utsav.UnitTests
-    dotnet test tests/Utsav.IsolationTests   # needs the SQL Server container
+    dotnet test tests/Utsav.IsolationTests   # needs the SQL Server container; set MSSQL_SA_PASSWORD and UTSAV_APP_PASSWORD
+    cd src/Utsav.Web && npm test             # pure-logic tests (colour contrast, ...)

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,6 +8,8 @@ import {
   KeyRound, Copy, Pencil,
 } from "lucide-react";
 import { api, qs } from "@/lib/api";
+import { parseHex } from "@/lib/brand";
+import { CommitteeAvatar } from "@/components/brand/CommitteeAvatar";
 import { useAuth } from "@/context/AuthContext";
 import { useEntityMutations } from "@/hooks/useEntityMutations";
 import type { AccessRequest, AppRole, Collector, Lookup, LookupCategory, PujaYear, User, Zone } from "@/types/db";
@@ -421,22 +423,50 @@ function UserSettings() {
 }
 
 // ---------------- Committee ----------------
-// Single-committee mode: this deployment runs exactly one committee, so
-// there's nothing to switch between or create — just its name.
+// This committee's own name, brand colour and logo. Each committee on the
+// platform sets its own; changing them here never touches another's.
 function CommitteeSettings() {
   const { org, refreshSession } = useAuth();
   const [name, setName] = useState(org?.name ?? "");
+  const [colour, setColour] = useState(org?.accent_colour ?? "");
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => setName(org?.name ?? ""), [org?.name]);
+  useEffect(() => setColour(org?.accent_colour ?? ""), [org?.accent_colour]);
+
+  const onDone = (message: string) => async () => { await refreshSession(); toast.success(message); };
+  const onFail = (e: unknown) => toast.error((e as Error).message);
 
   const rename = useMutation({
     mutationFn: (v: string) => api.patch("/organizations/current", { name: v }),
-    onSuccess: async () => { await refreshSession(); toast.success("Committee renamed"); },
-    onError: (e: unknown) => toast.error((e as Error).message),
+    onSuccess: onDone("Committee renamed"),
+    onError: onFail,
+  });
+  const recolour = useMutation({
+    mutationFn: (v: string | null) => api.patch("/organizations/current", { accent_colour: v }),
+    onSuccess: onDone("Brand colour saved"),
+    onError: onFail,
+  });
+  const uploadLogo = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return api.upload("/organizations/current/logo", form);
+    },
+    onSuccess: onDone("Logo updated"),
+    onError: onFail,
+  });
+  const removeLogo = useMutation({
+    mutationFn: () => api.del("/organizations/current/logo"),
+    onSuccess: onDone("Logo removed"),
+    onError: onFail,
   });
 
+  const colourValid = colour === "" || parseHex(colour) !== null;
+  const colourChanged = (colour || null) !== (org?.accent_colour ?? null);
+
   return (
-    <Card className="p-4">
+    <Card className="space-y-5 p-4">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <Building2 className="h-4.5 w-4.5" />
@@ -448,6 +478,55 @@ function CommitteeSettings() {
               onClick={() => rename.mutate(name.trim())}>
               {rename.isPending ? "Saving…" : "Save"}
             </Button>
+          </div>
+        </Field>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Brand colour" hint="Buttons, links and highlights. It is adjusted automatically so text stays readable.">
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              aria-label="Pick a brand colour"
+              value={parseHex(colour) ? colour : "#1d4ed8"}
+              onChange={(e) => setColour(e.target.value)}
+              className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-input bg-card p-1"
+            />
+            <Input value={colour} onChange={(e) => setColour(e.target.value.trim())} placeholder="Default"
+              className="font-mono" aria-invalid={!colourValid} />
+            <Button className="shrink-0" disabled={!colourValid || !colourChanged || recolour.isPending}
+              onClick={() => recolour.mutate(colour || null)}>
+              Save
+            </Button>
+          </div>
+          {!colourValid && <p className="mt-1 text-xs text-destructive">Use a hex colour such as #b45309.</p>}
+          {org?.accent_colour && (
+            <Button variant="link" size="sm" className="mt-1 h-auto p-0" onClick={() => recolour.mutate(null)}>
+              Use the default colour
+            </Button>
+          )}
+        </Field>
+
+        <Field label="Logo" hint="PNG, JPEG, GIF or WebP, up to 512 KB. It appears in the header and on your reports.">
+          <div className="flex items-center gap-3">
+            <CommitteeAvatar name={org?.name ?? "?"} logoUrl={org?.logo_url} accentColour={org?.accent_colour} className="h-12 w-12 text-lg" />
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/png,image/jpeg,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadLogo.mutate(file);
+                e.target.value = "";
+              }}
+            />
+            <Button variant="outline" disabled={uploadLogo.isPending} onClick={() => fileInput.current?.click()}>
+              {uploadLogo.isPending ? "Uploading…" : org?.logo_url ? "Replace" : "Upload"}
+            </Button>
+            {org?.logo_url && (
+              <Button variant="ghost" disabled={removeLogo.isPending} onClick={() => removeLogo.mutate()}>Remove</Button>
+            )}
           </div>
         </Field>
       </div>

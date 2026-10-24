@@ -77,6 +77,33 @@ public class TenancyGuardTests
         TenancyGuard.AssertScoped("SELECT 'copied FROM donors' AS note, id FROM users WHERE id=@id", ["@id"]);
     }
 
+    [Theory]
+    [InlineData("UPDATE organizations SET name=@name")]
+    [InlineData("UPDATE [organizations] SET accent_colour=@c WHERE slug=@slug")]
+    [InlineData("DELETE FROM organizations")]
+    [InlineData("UPDATE organizations SET name=@name WHERE id=@id")]
+    public void A_statement_that_could_touch_every_committee_row_of_the_organizations_table_is_refused(string sql)
+    {
+        // organizations is the one table that carries no org_id (its own id is
+        // the committee). A missing WHERE there would rename EVERY committee,
+        // so the guard requires the statement to name the caller's committee.
+        Assert.Throws<TenancyViolationException>(() => TenancyGuard.AssertScoped(sql, ["@name", "@c", "@slug", "@id", "@org"]));
+    }
+
+    [Fact]
+    public void An_update_that_names_the_callers_committee_is_allowed()
+    {
+        TenancyGuard.AssertScoped("UPDATE organizations SET name=@name WHERE id=@org", ["@name", "@org"]);
+        TenancyGuard.AssertScoped("UPDATE [organizations] SET logo_blob=@b WHERE [id] = @org", ["@b", "@org"]);
+    }
+
+    [Fact]
+    public void Reading_the_organizations_table_is_not_restricted_by_this_rule()
+    {
+        // The directory of committees and sign-in both read it, unscoped, by design.
+        TenancyGuard.AssertScoped("SELECT id, name FROM organizations WHERE slug=@slug", ["@slug"]);
+    }
+
     [Fact]
     public void Guard_table_list_matches_the_ef_models_org_scoped_tables_exactly()
     {

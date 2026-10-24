@@ -10,6 +10,7 @@ import { ServerOffline } from "@/pages/ServerOffline";
 import { PendingApproval } from "@/pages/PendingApproval";
 import { ChooseCommittee } from "@/pages/ChooseCommittee";
 import { PlatformConsole } from "@/pages/PlatformConsole";
+import { TenantTheme } from "@/components/brand/TenantTheme";
 import { useSyncPushRegistration } from "@/hooks/useSyncPushRegistration";
 import { Dashboard } from "@/pages/Dashboard";
 import { ReportsPage } from "@/pages/Reports";
@@ -77,6 +78,15 @@ function HistoryRoute({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  return (
+    <>
+      <TenantTheme />
+      <AppContent />
+    </>
+  );
+}
+
+function AppContent() {
   const { loading, user, org, memberships, isPlatformAdmin, status, serverDown } = useAuth();
   const { pathname } = useLocation();
 

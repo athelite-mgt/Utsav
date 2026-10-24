@@ -1709,10 +1709,10 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
 
-                    b.Property<string>("LogoUrl")
+                    b.Property<string>("LogoBlob")
                         .HasMaxLength(1024)
                         .HasColumnType("nvarchar(1024)")
-                        .HasColumnName("logo_url");
+                        .HasColumnName("logo_blob");
 
                     b.Property<string>("Name")
                         .IsRequired()

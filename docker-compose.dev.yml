@@ -22,5 +22,17 @@ services:
       timeout: 5s
       retries: 12
 
+  # Azure Storage emulator, so document and logo uploads work locally against
+  # the same Azure Blob code path as production. Dev connection string:
+  # UseDevelopmentStorage=true
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    command: azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+    ports:
+      - "127.0.0.1:10000:10000"
+    volumes:
+      - utsav-blobs:/data
+
 volumes:
   utsav-sql:
+  utsav-blobs:
