@@ -208,18 +208,19 @@ public sealed class ExternalIdentityService(UtsavDbContext db, IConfiguration co
             await db.SaveChangesAsync(ct);
         }
 
-        await RequestAccessAsync(existing.Id, ct);
         return existing;
     }
 
     /// <summary>
-    /// Idempotent: a repeat sign-in for an already-pending or already-active
-    /// member changes nothing.
+    /// Asks to join a specific committee. There is no default committee, so
+    /// signing up no longer implies a request anywhere: the user names the
+    /// committee they want. Idempotent: repeating it for a committee the
+    /// user is already pending or active in changes nothing.
     /// </summary>
-    public async Task RequestAccessAsync(Guid userId, CancellationToken ct = default)
+    public async Task RequestAccessAsync(Guid userId, Guid orgId, CancellationToken ct = default)
     {
         var alreadyAMember = await db.OrgMembers
-            .AnyAsync(m => m.OrgId == SessionService.DefaultOrgId && m.UserId == userId, ct);
+            .AnyAsync(m => m.OrgId == orgId && m.UserId == userId, ct);
 
         if (alreadyAMember)
         {
@@ -229,7 +230,7 @@ public sealed class ExternalIdentityService(UtsavDbContext db, IConfiguration co
         db.OrgMembers.Add(new OrgMember
         {
             Id = Guid.NewGuid(),
-            OrgId = SessionService.DefaultOrgId,
+            OrgId = orgId,
             UserId = userId,
             Role = "viewer",
             Status = "pending",
@@ -259,7 +260,6 @@ public sealed class ExternalIdentityService(UtsavDbContext db, IConfiguration co
 
         db.Users.Add(user);
         await db.SaveChangesAsync(ct);
-        await RequestAccessAsync(user.Id, ct);
         return user;
     }
 }

@@ -1610,6 +1610,11 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("NEWSEQUENTIALID()");
 
+                    b.Property<string>("AccentColour")
+                        .HasMaxLength(7)
+                        .HasColumnType("nvarchar(7)")
+                        .HasColumnName("accent_colour");
+
                     b.Property<string>("City")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
@@ -1631,6 +1636,11 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnType("bit")
                         .HasDefaultValue(true)
                         .HasColumnName("is_active");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(1024)
+                        .HasColumnType("nvarchar(1024)")
+                        .HasColumnName("logo_url");
 
                     b.Property<string>("Name")
                         .IsRequired()

@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using Utsav.Infrastructure.Authentication;
+using Utsav.Infrastructure.Tenancy;
 
 namespace Utsav.Api.Authentication;
 
@@ -36,7 +37,8 @@ public sealed class ApiKeyAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    ApiKeyService apiKeys)
+    ApiKeyService apiKeys,
+    TenantContext tenant)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -76,6 +78,16 @@ public sealed class ApiKeyAuthenticationHandler(
         // indexed UPDATE on a route called on a schedule, so the cost of
         // sequencing it is irrelevant; TouchAsync still swallows its own
         // failures so a bookkeeping write can't fail a good report.
+        // An API key belongs to exactly one committee, and its tenant comes
+        // from the key record. A key with no committee is refused outright
+        // rather than defaulted, so it can never read another tenant's report.
+        if (key.OrgId is not { } keyOrg || keyOrg == Guid.Empty)
+        {
+            return AuthenticateResult.Fail("Invalid API key");
+        }
+
+        tenant.Resolve(keyOrg);
+
         await apiKeys.TouchAsync(key.Id, Context.RequestAborted);
 
         var identity = new ClaimsIdentity(

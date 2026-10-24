@@ -17,6 +17,12 @@ public partial class Organization
 
     public bool IsActive { get; set; }
 
+    /// <summary>Committee logo, a tenant-prefixed blob URL. Null falls back to an initial.</summary>
+    public string? LogoUrl { get; set; }
+
+    /// <summary>Brand colour as a #rgb or #rrggbb hex literal, validated on write.</summary>
+    public string? AccentColour { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public virtual ICollection<AdBooking> AdBookings { get; set; } = new List<AdBooking>();

@@ -68,6 +68,12 @@ public partial class UtsavDbContext
             modelBuilder.Entity(entity).Property(property).HasColumnType("nvarchar(max)");
         }
 
+        modelBuilder.Entity<Organization>(entity =>
+        {
+            entity.Property(e => e.LogoUrl).HasColumnName("logo_url").HasMaxLength(1024);
+            entity.Property(e => e.AccentColour).HasColumnName("accent_colour").HasMaxLength(7);
+        });
+
         RelaxOrgCascades(modelBuilder);
         BreakSecondaryCascadePaths(modelBuilder);
 

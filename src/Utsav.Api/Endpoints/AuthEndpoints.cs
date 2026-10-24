@@ -115,7 +115,7 @@ public static class AuthEndpoints
     {
         var token = await sessions.CreateSessionAsync(userId, ct);
         var session = await sessions.LoadSessionAsync(token, ct);
-        return Results.Ok(new AuthResponse(token, session!.User, session.Org, session.Role, session.Status));
+        return Results.Ok(new AuthResponse(token, session!.User, session.Org, session.Role, session.Status, session.Memberships));
     }
 
     private static IResult MeAsync(HttpContext http)
@@ -139,5 +139,7 @@ public static class AuthEndpoints
 
     private sealed record EntraRequest(string? IdToken);
 
-    private sealed record AuthResponse(string Token, SessionUser User, SessionOrganization? Org, string? Role, string Status);
+    private sealed record AuthResponse(
+        string Token, SessionUser User, SessionOrganization? Org, string? Role, string Status,
+        IReadOnlyList<SessionMembership> Memberships);
 }

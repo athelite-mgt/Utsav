@@ -41,6 +41,7 @@
     <!-- Referenced directly rather than left to transitive resolution so the
          whole EFCore 10.0.11 family stays in lockstep and flows downstream to
          projects referencing Utsav.Infrastructure — see the MSB3277 note above. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <!-- tools/Utsav.DataMigration — one-way Supabase → Azure SQL copy. The only

@@ -3,6 +3,7 @@ using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using Utsav.Infrastructure.Authentication;
+using Utsav.Infrastructure.Tenancy;
 
 namespace Utsav.Api.Authentication;
 
@@ -34,7 +35,8 @@ public sealed class LegacySessionAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
     UrlEncoder encoder,
-    SessionService sessions)
+    SessionService sessions,
+    TenantContext tenant)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -55,6 +57,15 @@ public sealed class LegacySessionAuthenticationHandler(
         // Endpoints that already need the full payload (e.g. /auth/me) can
         // read this instead of re-querying for what was just resolved here.
         Context.Items[nameof(SessionPayload)] = session;
+
+        // The one place a tenant enters a member's request. Only an active
+        // membership in the pinned committee establishes it, so a pending or
+        // revoked member reaches the app with no tenant at all and every data
+        // endpoint refuses them.
+        if (session.Org is not null && session.Status == "active")
+        {
+            tenant.Resolve(session.Org.Id);
+        }
 
         var claims = new List<Claim>
         {
