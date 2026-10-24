@@ -9,6 +9,15 @@ SQL, with Cosmos DB (audit trail) and Blob Storage (documents, committee logos).
 > clients and publish profile. Do not point any setting below at the original
 > app's resources.
 
+## Environment
+
+| Item | Value |
+|---|---|
+| Repository | https://github.com/athelite-mgt/Utsav |
+| App Service | `utsav-dyeedqdbhpazg8es` (Central India) |
+| Public host | `https://utsav.athelitesm.com` |
+| Key Vault | `Utsav` |
+
 ## 1. Azure resources
 
 | Resource | Notes |
@@ -30,8 +39,14 @@ backstop if the application cannot switch it off.
 
 **Never** make the app login `db_owner`, `db_ddladmin` or `sysadmin`: it could
 then drop the security policy it runs under. `scripts/sql/create-app-principal.sql`
-creates the app login and role; run it once, after the first migration, as the
-deploy login.
+creates the app login and grants it the role (the `utsav_app_role` role itself is
+created by the migrations). Run it once, after the first migration, as the deploy
+login, in two steps:
+
+```bash
+sqlcmd -S <server> -U <deploy login> -d master -v APP_PASSWORD="<new password>" STEP=login -i scripts/sql/create-app-principal.sql
+sqlcmd -S <server> -U <deploy login> -d <db>     -v APP_PASSWORD="<new password>" STEP=user  -i scripts/sql/create-app-principal.sql
+```
 
 ## 3. App Service application settings
 
@@ -45,18 +60,30 @@ deploy login.
 | `Storage__ConnectionString`, `Storage__ContainerName` | Blob storage for documents and committee logos. |
 | `Push__VapidPublicKey`, `Push__VapidPrivateKey`, `Push__Subject` | **New** VAPID key pair and a `mailto:`/`https:` contact. Optional: without them push is silently off. |
 | `Asura__Enabled` | Leave unset. The AI assistant stays off unless deliberately enabled; if enabled it also needs `Asura__GroqApiKey` / `Asura__NvidiaApiKey`. |
+| `Auth__RateLimit__PermitsPerMinute` | Optional. Per-client-address budget shared by sign-in, sign-up, Google/Entra sign-in and invite redemption (default 20/minute; further requests get 429). Keyed on the address after forwarded headers, so it needs the platform proxy's `X-Forwarded-For`; add Front Door/WAF rules as defence in depth. |
 | `Audit__Mode` | **Do not set in production.** `Log` writes the audit trail to the log instead of Cosmos and exists for local development only. |
 
-No secret belongs in the repository. Store them as App Service settings (or
-Key Vault references).
+No secret belongs in the repository. Keep them in the `Utsav` Key Vault and
+reference them from App Service so the values never appear in the portal or the
+workflow:
+
+```
+ConnectionStrings__AzureSql = @Microsoft.KeyVault(VaultName=Utsav;SecretName=<secret name>)
+```
+
+This needs the App Service's managed identity (Identity → System assigned: On)
+to hold **Key Vault Secrets User** on the vault. A setting whose reference does
+not resolve shows a red status in the portal's configuration blade.
 
 ## 4. Identity provider redirect URIs
 
 Both providers must list the new origin or social sign-in fails, with no
 code-level workaround:
 
-- Google OAuth client → Authorised JavaScript origins: `https://<host>`
-- Entra app registration → Redirect URI (SPA): `https://<host>`
+- Google OAuth client → **Authorised JavaScript origins**: `https://utsav.athelitesm.com` (the app uses Google Identity Services, which checks the *origin*; the `redirect_uris` entry alone is not enough). Add `http://localhost:5173` too if sign-in should work in local development.
+- Entra app registration → Redirect URI (SPA): `https://utsav.athelitesm.com`
+
+**Microsoft sign-in is not set up yet.** Until `VITE_ENTRA_CLIENT_ID` and `VITE_ENTRA_TENANT_ID` are provided, the login page shows the Microsoft button greyed out with "Not available right now". Setting the two repository variables below and redeploying enables it with no code change.
 
 ## 5. GitHub Actions
 
@@ -67,8 +94,13 @@ the frontend. The deploy job is gated so nothing deploys by accident:
 
 1. Create the new App Service and download its publish profile.
 2. Store it as the repository secret `UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE`.
-3. Set `AZURE_WEBAPP_NAME` in the workflow to the new App Service name.
+3. `AZURE_WEBAPP_NAME` in the workflow is already `utsav-dyeedqdbhpazg8es`.
 4. Set the repository variable `UTSAV_DEPLOY_ENABLED` to `true`.
+5. Set the repository variable `UTSAV_GOOGLE_CLIENT_ID` (the OAuth client ID, which
+   is public). Later, `UTSAV_ENTRA_CLIENT_ID` and `UTSAV_ENTRA_TENANT_ID`.
+   These are compiled into the browser bundle at publish time, so changing one
+   needs a redeploy. Never put the Google *client secret* here: this app does not
+   use it.
 
 Migrations are deliberately **not** part of the deploy: schema changes are
 reviewed and applied by hand (section 6).
@@ -82,17 +114,17 @@ reviewed and applied by hand (section 6).
    dotnet ef database update -p src/Utsav.Infrastructure -s src/Utsav.Api
    ```
 
-2. Run `scripts/sql/create-app-principal.sql` to create `utsav_app`.
+2. Create `utsav_app` with `scripts/sql/create-app-principal.sql` (section 2).
 3. Deploy / start the app. **No committee exists** — deliberate; a pooled
    platform must not conjure a tenant.
 4. Sign up with the address in `Platform__BootstrapAdminEmail`, then restart the
-   app so the promotion applies. A **Platform** entry appears in the account menu.
+   app so the promotion applies. A **Platform** section appears in the sidebar.
 5. In the Platform console, create the first committee: name, festival
    (`durga` or `kali`), city, first year and the first admin's email. The
    console shows a **one-time invite code** (also returned by
    `POST /api/platform/committees` as `invite_code`).
 6. Give the code to the first admin through a channel you trust. They sign up
-   (or sign in), choose **I have an invite code**, and enter it. The code is
+   (or sign in), and enter it under **Have an invite code?**. The code is
    bound to their email, expires after 14 days and works once; the database holds
    only its hash.
 7. The admin then invites the rest of the committee and sets branding
@@ -112,11 +144,8 @@ committee that already has people in it.
   response); a missing or wrong header is a 403.
 - Scripts and integrations use **API keys** (`X-Api-Key`), not sessions.
 
-## 8. Known gaps to close before wider rollout
+## 8. Known gaps
 
-- **No rate limiting on `/api/auth/login`, `/signup` and `/redeem-invite`.**
-  Put Azure Front Door / WAF rate rules in front, or add an ASP.NET Core rate
-  limiter policy, before opening sign-up beyond trusted committees.
 - Custom domain per committee, per-tenant PWA manifest/icons and a self-serve
   signup flow are intentionally not built.
 - Historical data import for a committee (e.g. Kalipuja) is a separate piece of

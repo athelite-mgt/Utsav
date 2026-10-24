@@ -47,8 +47,8 @@ function clearStuckInteractionFlag() {
  * button, and pulling it into the initial bundle would slow the first paint
  * of a login screen most people reach through Google instead.
  *
- * Renders nothing unless configured, matching GoogleSignInButton — a
- * committee that hasn't set up Entra simply doesn't see the option.
+ * Shown disabled ("Not available right now") until Entra is configured, so
+ * people can see the option exists and know it is not a fault.
  */
 export function MicrosoftSignInButton({ onPendingChange }: { onPendingChange?: (v: boolean) => void }) {
   const { signInWithMicrosoft } = useAuth();
@@ -74,7 +74,26 @@ export function MicrosoftSignInButton({ onPendingChange }: { onPendingChange?: (
     clearStuckInteractionFlag();
   }, []);
 
-  if (!CLIENT_ID || !TENANT_ID) return null;
+  // Not set up yet: show the option, greyed out and honest about why, rather
+  // than hiding it. Once the VITE_ENTRA_* values exist this becomes the live
+  // button with no other change.
+  if (!CLIENT_ID || !TENANT_ID) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        disabled
+        title="Microsoft sign-in is not available right now"
+        className="h-11 w-full justify-center gap-2 rounded-lg text-sm font-medium"
+      >
+        <span className="opacity-50"><MicrosoftLogo /></span>
+        <span className="flex flex-col items-start leading-tight">
+          <span>Continue with Microsoft</span>
+          <span className="text-[11px] font-normal">Not available right now</span>
+        </span>
+      </Button>
+    );
+  }
 
   async function getMsal() {
     if (msalRef.current) return msalRef.current;

@@ -12,10 +12,6 @@ import { MicrosoftSignInButton } from "@/components/auth/MicrosoftSignInButton";
 import { InstallPrompt } from "@/components/common/InstallPrompt";
 
 const googleEnabled = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
-const microsoftEnabled = Boolean(
-  import.meta.env.VITE_ENTRA_CLIENT_ID && import.meta.env.VITE_ENTRA_TENANT_ID
-);
-const ssoEnabled = googleEnabled || microsoftEnabled;
 
 /** Staggered entrance — each block lands just after the one above it. */
 const rise = (delayMs: number): CSSProperties => ({ animationDelay: `${delayMs}ms` });
@@ -101,14 +97,14 @@ export function Login() {
 
           {/* Single sign-on. Google first: it is how almost every existing
               member already signs in. */}
-          {ssoEnabled && (
+          {(
             <div className="animate-rise mt-5" style={rise(130)}>
               {googleEnabled && <GoogleSignInButton onPendingChange={setGoogleBusy} />}
-              {microsoftEnabled && (
-                <div className={googleEnabled ? "mt-3" : undefined}>
-                  <MicrosoftSignInButton onPendingChange={setGoogleBusy} />
-                </div>
-              )}
+              {/* Always shown: when Entra is not configured the button renders
+                  itself disabled, saying so. */}
+              <div className={googleEnabled ? "mt-3" : undefined}>
+                <MicrosoftSignInButton onPendingChange={setGoogleBusy} />
+              </div>
               <div className="my-5 flex items-center gap-3">
                 <div className="h-px flex-1 bg-border" />
                 <span className="text-xs text-muted-foreground">or with email</span>

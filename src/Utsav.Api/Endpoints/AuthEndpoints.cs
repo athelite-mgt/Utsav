@@ -10,15 +10,18 @@ namespace Utsav.Api.Endpoints;
 
 public static class AuthEndpoints
 {
+    /// <summary>Per-client throttle shared by every endpoint that takes a secret.</summary>
+    public const string RateLimitPolicy = "auth";
+
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/auth");
 
         // Public — these are how a token is obtained in the first place.
-        group.MapPost("/login", LoginAsync).AllowAnonymous();
-        group.MapPost("/signup", SignupAsync).AllowAnonymous();
-        group.MapPost("/google", GoogleAsync).AllowAnonymous();
-        group.MapPost("/entra", EntraAsync).AllowAnonymous();
+        group.MapPost("/login", LoginAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
+        group.MapPost("/signup", SignupAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
+        group.MapPost("/google", GoogleAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
+        group.MapPost("/entra", EntraAsync).AllowAnonymous().RequireRateLimiting(RateLimitPolicy);
 
         // Authenticated, but membership status doesn't matter here — a
         // pending/denied user still needs /me to find that out.
@@ -31,7 +34,7 @@ public static class AuthEndpoints
         // access is how a user with none gets started.
         group.MapPost("/switch-org", SwitchOrgAsync).RequireAuthorization();
         group.MapPost("/request-access", RequestAccessAsync).RequireAuthorization();
-        group.MapPost("/redeem-invite", RedeemInviteAsync).RequireAuthorization();
+        group.MapPost("/redeem-invite", RedeemInviteAsync).RequireAuthorization().RequireRateLimiting(RateLimitPolicy);
 
         return app;
     }

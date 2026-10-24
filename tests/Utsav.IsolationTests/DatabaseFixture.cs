@@ -117,15 +117,27 @@ public sealed class DatabaseFixture : IAsyncLifetime
         // under). Selected explicitly: the app's default is Cosmos.
         Environment.SetEnvironmentVariable("Audit__Mode", "Log");
 
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        _factory = NewHost();
+    }
+
+    /// <summary>
+    /// A host wired the same way as the shared one (same database, in-memory audit and blobs).
+    /// The sign-in throttle is raised well above anything the suite does; a test that exercises
+    /// it passes <paramref name="configure"/> to set its own limit.
+    /// </summary>
+    public WebApplicationFactory<Program> NewHost(Action<Microsoft.AspNetCore.Hosting.IWebHostBuilder>? configure = null) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Auth:RateLimit:PermitsPerMinute", "100000");
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IAuditSink>();
                 services.AddSingleton<IAuditSink>(Audit);
                 services.RemoveAll<IBlobStorageService>();
                 services.AddSingleton<IBlobStorageService>(Blobs);
-            }));
-    }
+            });
+            configure?.Invoke(builder);
+        });
 
     public async Task DisposeAsync()
     {

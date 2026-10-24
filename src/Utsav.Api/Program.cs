@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 using System.Text.Json;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.StaticFiles;
@@ -41,6 +42,31 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 
 builder.Services.AddSingleton(TimeProvider.System);
+
+// Endpoints that take a secret (a password, a provider token, an invite code)
+// share one per-client budget, so guessing across several of them does not
+// multiply the allowance. Keyed on the address the forwarded-headers
+// middleware resolved, which is why UseRateLimiter runs after it.
+builder.Services.AddRateLimiter(limiter =>
+{
+    limiter.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new { error = "Too many attempts. Wait a minute and try again." }, ct);
+    };
+    var perMinute = builder.Configuration.GetValue<int?>("Auth:RateLimit:PermitsPerMinute") ?? 20;
+    limiter.AddPolicy(AuthEndpoints.RateLimitPolicy, http =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = perMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+});
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<ExternalIdentityService>();
 builder.Services.AddScoped<ApiKeyService>();
@@ -113,6 +139,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseRateLimiter();
 
 // The built React app (wwwroot, populated by the frontend build on `dotnet
 // publish` — see Utsav.Api.csproj) is served from the same origin as the API.

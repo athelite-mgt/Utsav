@@ -11,12 +11,11 @@ on:
 env:
   DOTNET_VERSION: "10.0.x"
   NODE_VERSION: "22.x"
-  # Deliberately a placeholder. This product is separate from the original
-  # single-committee app, and this workflow must never be able to deploy over
-  # it: the deploy job also refuses to run until UTSAV_DEPLOY_ENABLED is set
-  # to "true" as a repository variable, after the new App Service exists and
-  # its own publish profile is stored as UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE.
-  AZURE_WEBAPP_NAME: "REPLACE-WITH-NEW-APP-SERVICE-NAME"
+  # This product is separate from the original single-committee app. The deploy
+  # job refuses to run until UTSAV_DEPLOY_ENABLED is set to "true" as a
+  # repository variable, and it authenticates with its OWN publish profile
+  # (UTSAV_AZURE_WEBAPP_PUBLISH_PROFILE), so it cannot deploy over any other app.
+  AZURE_WEBAPP_NAME: "utsav-dyeedqdbhpazg8es"
 
 jobs:
   # Runs on every push, including branches that never deploy — the point is
@@ -93,8 +92,16 @@ jobs:
       # One command produces the whole deployable artifact: the API, plus the
       # built React app copied into wwwroot. Nothing App-Service-specific
       # about this step — the same command works for any host.
+      # VITE_* values are compiled into the browser bundle, so they must be
+      # non-secret. The Google OAuth client ID is public (it is in every ID token);
+      # keep it as a repository *variable*, not a secret. The Entra values stay
+      # unset until Microsoft sign-in is set up - the button then shows disabled.
       - name: Publish (API + frontend into wwwroot)
         run: dotnet publish src/Utsav.Api --configuration Release --output ./publish
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.UTSAV_GOOGLE_CLIENT_ID }}
+          VITE_ENTRA_CLIENT_ID: ${{ vars.UTSAV_ENTRA_CLIENT_ID }}
+          VITE_ENTRA_TENANT_ID: ${{ vars.UTSAV_ENTRA_TENANT_ID }}
 
       # No database migration step here on purpose. This is a live committee's
       # finance data — schema changes get applied deliberately, by hand
