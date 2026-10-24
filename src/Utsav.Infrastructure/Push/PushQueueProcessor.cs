@@ -51,7 +51,18 @@ public sealed class PushQueueProcessor(
 
     private async Task HandleAsync(PushNotificationRequest request, CancellationToken ct)
     {
+        // A background worker has no request, so no tenant. Establish it from
+        // the request being processed before the database is touched: the
+        // query filters and row-level security would otherwise see no tenant
+        // and the notification insert would be rejected.
+        if (request.OrgId is not { } orgId)
+        {
+            logger.LogWarning("Dropping push notification {Title}: it names no committee", request.Title);
+            return;
+        }
+
         using var scope = scopeFactory.CreateScope();
+        scope.ServiceProvider.GetRequiredService<Tenancy.TenantContext>().Resolve(orgId);
         var db = scope.ServiceProvider.GetRequiredService<UtsavDbContext>();
 
         // Durable log first, so the Notifications page shows it regardless of

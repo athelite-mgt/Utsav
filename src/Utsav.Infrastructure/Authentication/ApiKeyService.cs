@@ -50,7 +50,12 @@ public sealed class ApiKeyService(UtsavDbContext db)
         if (string.IsNullOrWhiteSpace(presentedKey)) return null;
 
         var hash = HashKey(presentedKey);
-        return await db.ApiKeys.AsNoTracking()
+
+        // A key is looked up by its high-entropy hash BEFORE any tenant is
+        // known - the key is what establishes the tenant - so the tenant
+        // filter must not apply here. This is the one deliberate cross-tenant
+        // read on the authentication path.
+        return await db.ApiKeys.IgnoreQueryFilters().AsNoTracking()
             .FirstOrDefaultAsync(k => k.KeyHash == hash && k.RevokedAt == null, ct);
     }
 

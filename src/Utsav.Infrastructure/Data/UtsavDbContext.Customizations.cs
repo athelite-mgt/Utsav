@@ -77,6 +77,9 @@ public partial class UtsavDbContext
         RelaxOrgCascades(modelBuilder);
         BreakSecondaryCascadePaths(modelBuilder);
 
+        // Last, so it layers on top of the generated configuration.
+        ApplyTenantFilters(modelBuilder);
+
         // Backs the sessions primary key — 32 random bytes rendered as hex.
         modelBuilder.Entity<Session>().Property(s => s.Token).HasMaxLength(64);
 
