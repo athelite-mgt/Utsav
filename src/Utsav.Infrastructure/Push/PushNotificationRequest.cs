@@ -23,8 +23,4 @@ public sealed record PushNotificationRequest(
     /// <summary>Display name of the actor, for the in-app Notifications log.</summary>
     string? ActorName = null,
     /// <summary>"transaction" or "announcement" — logged for the Notifications page.</summary>
-    string Kind = "transaction",
-    // Narrow who hears it. OnlyToUserId wins over Roles; with neither set the
-    // default audience (the money-responsible roles) applies.
-    IReadOnlyList<string>? Roles = null,
-    Guid? OnlyToUserId = null);
+    string Kind = "transaction");

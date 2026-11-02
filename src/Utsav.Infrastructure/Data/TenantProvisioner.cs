@@ -91,7 +91,7 @@ public sealed partial class TenantProvisioner(IServiceScopeFactory scopes)
                 await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
                 var now = DateTime.UtcNow;
-                db.Organizations.Add(new Organization { Id = orgId, Name = name, Slug = slug, City = request.City?.Trim(), IsActive = true, FeastEnabled = false });
+                db.Organizations.Add(new Organization { Id = orgId, Name = name, Slug = slug, City = request.City?.Trim(), IsActive = true });
 
                 db.Zones.AddRange(FestivalTemplates.DefaultZones.Select((zone, i) => new Zone
                 {

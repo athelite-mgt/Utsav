@@ -40,17 +40,6 @@ public partial class CollectionPayment
 
     public string? RecordedByName { get; set; }
 
-    /// <summary>approved | pending | sent_back | rejected — only approved money reaches the fund.</summary>
-    public string Status { get; set; } = "approved";
-
-    public Guid? DecidedByUserId { get; set; }
-
-    public string? DecidedByName { get; set; }
-
-    public DateTime? DecidedAt { get; set; }
-
-    public string? DecisionNote { get; set; }
-
     public DateTime CreatedAt { get; set; }
 
     public virtual Organization? Org { get; set; }

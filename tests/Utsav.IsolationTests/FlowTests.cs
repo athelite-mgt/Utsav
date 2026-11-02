@@ -71,9 +71,7 @@ public class FlowTests(DatabaseFixture fixture)
     [Fact]
     public async Task An_advance_can_be_issued_and_settled_against_an_expense()
     {
-        // The cashier alone handles advances.
-        var (_, financeToken) = await fixture.NewMemberAsync("flow-finance", [(fixture.TenantC, "finance", "active")], fixture.TenantC);
-        using var asC = fixture.ClientFor(financeToken);
+        using var asC = fixture.ClientFor(fixture.TokenForC);
 
         var issued = await asC.PostAsJsonAsync("/api/advances", new
         {

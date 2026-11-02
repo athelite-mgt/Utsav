@@ -9,19 +9,19 @@ import type { AppRole, Permission } from "@/types/db";
 const GRANTS: Record<AppRole, Permission[]> = {
   admin: [
     "read", "manage_settings", "manage_users",
-    "write_income", "write_finance", "write_workflow", "read_audit",
-    "use_asura", "submit_money", "approve_money",
+    "write_income", "write_finance", "write_workflow", "write_advances", "read_audit",
+    "use_asura",
   ],
   secretariat: [
     "read", "manage_users",
-    "write_income", "write_finance", "write_workflow", "read_audit",
-    "use_asura", "submit_money",
+    "write_income", "write_finance", "write_workflow", "write_advances", "read_audit",
+    "use_asura",
   ],
   finance: [
     "read", "write_income", "write_finance", "write_workflow", "write_advances",
-    "use_asura", "submit_money", "approve_money",
+    "use_asura",
   ],
-  executive: ["read", "write_workflow", "submit_money"],
+  executive: ["read", "write_workflow", "write_advances"],
   viewer: ["read"],
 };
 

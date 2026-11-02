@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Utsav.Infrastructure.Data.Entities;
@@ -16,9 +16,6 @@ public partial class Organization
     public string? EntraTenantId { get; set; }
 
     public bool IsActive { get; set; }
-
-    /// <summary>The Feast section can be switched off per committee; nothing is deleted when it is.</summary>
-    public bool FeastEnabled { get; set; } = true;
 
     /// <summary>
     /// The logo's blob name, always under this committee's own

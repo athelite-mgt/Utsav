@@ -58,7 +58,6 @@ function AdDialog({
     if (existingPayments) {
       setPayments(existingPayments.map((p, i) => ({
         key: `e-${p.id}-${i}`, amount: Number(p.amount) || 0, paid_on: p.paid_on ?? new Date().toISOString().slice(0, 10), mode: p.mode,
-        status: p.status, decision_note: p.decision_note, recorded_by_user_id: p.recorded_by_user_id,
       })));
     }
   }, [existingPayments, open, booking]);
@@ -139,7 +138,6 @@ export function AdsPage() {
   const { activeYearId, previousYearId } = useYear();
   const { can } = useAuth();
   const canWrite = can("write_income");
-  const canRecord = canWrite || can("submit_money");
   const { data = [], isLoading } = useAdBookings(activeYearId);
   const { data: priorData = [] } = useAdBookings(previousYearId);
   const { remove } = useEntityMutations("ad_bookings", ["ad_bookings"], "Advertiser");
@@ -239,12 +237,12 @@ export function AdsPage() {
                       {b.status && <Badge variant="outline">{b.status}</Badge>}
                     </div>
                   </div>
-                  {canRecord && (
+                  {canWrite && (
                     <div className="flex shrink-0 gap-0.5">
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(b); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                      {canWrite && <ConfirmDialog title="Delete advertiser?" destructive confirmLabel="Delete"
+                      <ConfirmDialog title="Delete advertiser?" destructive confirmLabel="Delete"
                         onConfirm={() => remove.mutateAsync(b.id)}
-                        trigger={<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>} />}
+                        trigger={<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>} />
                     </div>
                   )}
                 </div>

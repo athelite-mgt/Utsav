@@ -443,11 +443,6 @@ function CommitteeSettings() {
     onSuccess: onDone("Committee renamed"),
     onError: onFail,
   });
-  const setFeast = useMutation({
-    mutationFn: (enabled: boolean) => api.patch("/organizations/current", { feast_enabled: enabled }),
-    onSuccess: async (_d, enabled) => { await refreshSession(); toast.success(enabled ? "Feast is on" : "Feast is off"); },
-    onError: onFail,
-  });
   const recolour = useMutation({
     mutationFn: (v: string | null) => api.patch("/organizations/current", { accent_colour: v }),
     onSuccess: onDone("Brand colour saved"),
@@ -511,22 +506,6 @@ function CommitteeSettings() {
               Use the default colour
             </Button>
           )}
-        </Field>
-
-        <Field
-          label="Feast"
-          hint="Turn the Feast section (collection, expenses and tokens) on or off. Turning it off hides it; nothing is deleted."
-        >
-          <label className="flex cursor-pointer items-center gap-3">
-            <input
-              type="checkbox"
-              className="h-5 w-5 accent-[hsl(var(--primary))]"
-              checked={org?.feast_enabled !== false}
-              disabled={setFeast.isPending}
-              onChange={(e) => setFeast.mutate(e.target.checked)}
-            />
-            <span className="text-sm">{org?.feast_enabled !== false ? "Feast is on" : "Feast is off"}</span>
-          </label>
         </Field>
 
         <Field label="Logo" hint="PNG, JPEG, GIF or WebP, up to 512 KB. It appears in the header and on your reports.">

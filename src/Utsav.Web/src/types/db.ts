@@ -12,9 +12,7 @@ export type Permission =
   | "write_workflow"
   | "write_advances"
   | "read_audit"
-  | "use_asura"
-  | "submit_money"
-  | "approve_money";
+  | "use_asura";
 
 /** One before→after change within an update, as /api/audit returns it. */
 export interface AuditChange {
@@ -61,10 +59,6 @@ export interface CollectionPaymentRow {
   paid_on: string | null;
   mode: string | null;
   recorded_by_name: string | null;
-  recorded_by_user_id?: string | null;
-  /** Waiting for Finance unless approved — rejected instalments are never listed. */
-  status?: ApprovalStatus;
-  decision_note?: string | null;
 }
 
 /** Collections for a year rolled up by income stream, date-range aware. Mirrors CollectionEndpoints.ByStreamAsync. */
@@ -220,8 +214,6 @@ export interface Organization {
   logo_url: string | null;
   /** Brand colour as a #rgb / #rrggbb hex literal, or null for the default theme. */
   accent_colour: string | null;
-  /** The Feast section can be switched off per committee; absent means on. */
-  feast_enabled?: boolean;
 }
 
 /** A committee as the platform operator's directory lists it: never its books. */
@@ -253,7 +245,6 @@ export interface Membership {
   accent_colour: string | null;
   role: AppRole;
   status: AccessStatus;
-  feast_enabled?: boolean;
 }
 
 /** A membership awaiting admin approval — see Settings > Access Requests. */
@@ -345,8 +336,6 @@ export interface Subscription {
   billed: number;
   billed_on: string | null;
   collected: number;
-  /** The part of `collected` still waiting for Finance to approve — see lib/approval.ts. */
-  pending_collected: number;
   due: number;
   mode: string | null;
   collected_on: string | null;
@@ -448,7 +437,6 @@ export interface AdBooking {
   billed: number;
   billed_on: string | null;
   collected: number;
-  pending_collected: number;
   due: number;
   mode: string | null;
   status: string | null;
@@ -471,7 +459,6 @@ export interface SpecialDonation {
   projected: number;
   billed: number;
   collected: number;
-  pending_collected: number;
   due: number;
   mode: string | null;
   collected_on: string | null;
@@ -511,15 +498,6 @@ export interface Expense {
   bill_no: string | null;
   vendor_name?: string | null;
   created_at: string;
-  /** Money is only counted once approved — see lib/approval.ts. Absent on old payloads means approved. */
-  status?: ApprovalStatus;
-  /** fund = committee money; own_pocket = the member paid and is owed back once approved. */
-  paid_from?: "fund" | "own_pocket";
-  recorded_by_user_id?: string | null;
-  recorded_by_name?: string | null;
-  decision_note?: string | null;
-  refunded_on?: string | null;
-  refund_mode?: string | null;
 }
 
 /** Spending against the feast pool — same shape as Expense minus contract/advance linkage, kept in its own table (see FeastExpense.cs) so it never touches the general fund's Budget/Expenses figures. */
@@ -607,40 +585,6 @@ export interface FundPosition {
   /** Newest first — bundled in so the dashboard needs only this one call. */
   recentTransfers: RecentTransfer[];
   total: { opening: number; received: number; spent: number; advancesOut: number; balance: number };
-  /** Money recorded but NOT in the fund yet. */
-  pending: PendingMoney;
-}
-
-/** What is held by members, waiting for confirmation or owed back — none of it is in Cash/Bank. */
-export interface PendingMoney {
-  heldByMembers: FundBreakdownEntry[];
-  heldTotal: number;
-  onlinePending: number;
-  pendingExpenses: number;
-  pendingExpensesTotal: number;
-  owedToMembers: FundBreakdownEntry[];
-  owedTotal: number;
-}
-
-export type ApprovalStatus = "approved" | "pending" | "sent_back" | "rejected";
-
-/** One entry in Finance's queue (or a member's own list): a payment or an expense awaiting a decision. */
-export interface ApprovalItem {
-  kind: "income" | "expense";
-  id: string;
-  year_id: string;
-  year: number;
-  status: ApprovalStatus;
-  recorded_by_user_id: string | null;
-  recorded_by_name: string | null;
-  label: string | null;
-  source: string;
-  amount: number;
-  mode: string | null;
-  on_date: string | null;
-  note: string | null;
-  created_at: string;
-  paid_from: "fund" | "own_pocket" | null;
 }
 
 /** One payer's total on one side of the fund — the "tap the card to see who" breakdown. */

@@ -110,12 +110,11 @@ public class PermissionAuthorizationHandlerTests
         Assert.False(await SucceedsAsync("viewer", Permission.WriteWorkflow));
 
     [Fact]
-    public async Task Admin_role_claim_succeeds_every_requirement_except_the_cashiers_advances()
+    public async Task Admin_role_claim_succeeds_every_requirement()
     {
         foreach (var permission in Enum.GetValues<Permission>())
         {
-            // Advances are the Finance role's alone; the matrix test pins that.
-            Assert.Equal(permission != Permission.WriteAdvances, await SucceedsAsync("admin", permission));
+            Assert.True(await SucceedsAsync("admin", permission));
         }
     }
 

@@ -145,17 +145,6 @@ public static class AdminEndpoints
             parameters.Add(P("@accent", (object?)BrandingValidation.NormaliseAccentColour(colour) ?? DBNull.Value));
         }
 
-        if (body.ValueKind == JsonValueKind.Object && body.TryGetProperty("feast_enabled", out var feast))
-        {
-            if (feast.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
-            {
-                return Results.Json(new { error = "feast_enabled must be true or false" }, statusCode: 400);
-            }
-
-            assignments.Add("feast_enabled=@feast");
-            parameters.Add(P("@feast", feast.GetBoolean()));
-        }
-
         if (assignments.Count == 0)
         {
             return Results.Json(new { error = "Nothing to update" }, statusCode: 400);
@@ -166,7 +155,7 @@ public static class AdminEndpoints
 
         var org = await db.Organizations.AsNoTracking()
             .Where(o => o.Id == db.TenantId)
-            .Select(o => new { o.Id, o.Name, o.Slug, o.AccentColour, o.LogoBlob, o.FeastEnabled })
+            .Select(o => new { o.Id, o.Name, o.Slug, o.AccentColour, o.LogoBlob })
             .SingleAsync(ct);
 
         return Results.Ok(new
@@ -176,7 +165,6 @@ public static class AdminEndpoints
             slug = org.Slug,
             accent_colour = org.AccentColour,
             logo_url = BrandingUrls.LogoUrl(org.Id, org.LogoBlob),
-            feast_enabled = org.FeastEnabled,
         });
     }
 

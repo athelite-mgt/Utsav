@@ -35,21 +35,12 @@ public static class FundPositionEndpoint
     // from the committee's general fund (and from whatever expense tracking
     // Feast eventually gets), so it must never bump "cash in hand" / "bank
     // balance" here even though its instalments live in this same table.
-    //
-    // Only APPROVED money is in the fund: an instalment or expense waiting for
-    // Finance is not. An expense a member paid from their own pocket reaches the
-    // fund only when the committee pays them back (refunded_on), on the side the
-    // refund was made from — until then it is owed, not spent from the box.
     private const string Sql = """
         SELECT 'in' AS kind, amount, mode AS tag,
                CAST(NULL AS NVARCHAR(MAX)) AS note, CAST(NULL AS NVARCHAR(MAX)) AS on_date
-          FROM collection_payments WHERE year_id=@year AND org_id=@org AND parent_type <> 'feast' AND status = 'approved'
+          FROM collection_payments WHERE year_id=@year AND org_id=@org AND parent_type <> 'feast'
         UNION ALL
         SELECT 'out', amount,      mode,      NULL, NULL FROM expenses          WHERE year_id=@year AND org_id=@org
-           AND status = 'approved' AND paid_from = 'fund'
-        UNION ALL
-        SELECT 'out', amount,      refund_mode, NULL, NULL FROM expenses        WHERE year_id=@year AND org_id=@org
-           AND status = 'approved' AND paid_from = 'own_pocket' AND refunded_on IS NOT NULL
         UNION ALL
         SELECT 'adv', outstanding, mode,      NULL, NULL FROM v_advance_balances
          WHERE year_id=@year AND org_id=@org AND status <> 'cancelled'
@@ -91,7 +82,7 @@ public static class FundPositionEndpoint
               LEFT JOIN ad_bookings ab ON ab.id = cp.parent_id AND cp.parent_type = 'ad_booking'
               LEFT JOIN advertisers a ON a.id = ab.advertiser_id
               LEFT JOIN special_donations sd ON sd.id = cp.parent_id AND cp.parent_type = 'special_donation'
-             WHERE cp.year_id = @year AND cp.org_id = @org AND cp.parent_type <> 'feast' AND cp.status = 'approved'
+             WHERE cp.year_id = @year AND cp.org_id = @org AND cp.parent_type <> 'feast'
             """;
 
         var rows = await ModuleEndpoints.QueryAsync(db, sql,
@@ -182,64 +173,7 @@ public static class FundPositionEndpoint
                 cash.Received + bank.Received,
                 cash.Spent + bank.Spent,
                 cash.AdvancesOut + bank.AdvancesOut,
-                cash.Balance + bank.Balance),
-            await PendingAsync(db, year_id, ct)));
-    }
-
-    /// <summary>
-    /// The money that is NOT in the fund yet: cash members are holding for the
-    /// committee, online payments waiting to be confirmed, claims waiting for a
-    /// decision, and approved own-pocket claims the committee still owes back.
-    /// </summary>
-    private static async Task<PendingDto> PendingAsync(UtsavDbContext db, Guid yearId, CancellationToken ct)
-    {
-        // A SqlParameter can belong to only one command, so each query gets its own.
-        SqlParameter[] Args() => [new SqlParameter("@year", yearId), new SqlParameter("@org", db.TenantId)];
-
-        var instalments = await ModuleEndpoints.QueryAsync(db, """
-            SELECT amount, mode, recorded_by_name FROM collection_payments
-             WHERE year_id = @year AND org_id = @org AND parent_type <> 'feast' AND status IN ('pending', 'sent_back')
-            """, Args(), ct);
-
-        var held = new Dictionary<string, decimal>();
-        var online = 0m;
-        foreach (var row in instalments)
-        {
-            var amount = row["amount"] is decimal d ? d : 0m;
-            if (PaymentModeClassifier.BucketOf(row["mode"] as string) == FundSideKind.Bank)
-            {
-                online += amount;
-                continue;
-            }
-
-            var name = string.IsNullOrWhiteSpace(row["recorded_by_name"] as string) ? "Unknown" : (string)row["recorded_by_name"]!;
-            held[name] = held.GetValueOrDefault(name) + amount;
-        }
-
-        var claims = await ModuleEndpoints.QueryAsync(db, """
-            SELECT COUNT(*) AS n, ISNULL(SUM(amount), 0) AS total FROM expenses
-             WHERE year_id = @year AND org_id = @org AND status IN ('pending', 'sent_back')
-            """, Args(), ct);
-
-        var owedRows = await ModuleEndpoints.QueryAsync(db, """
-            SELECT amount, recorded_by_name FROM expenses
-             WHERE year_id = @year AND org_id = @org AND status = 'approved' AND paid_from = 'own_pocket' AND refunded_on IS NULL
-            """, Args(), ct);
-        var owed = new Dictionary<string, decimal>();
-        foreach (var row in owedRows)
-        {
-            var name = string.IsNullOrWhiteSpace(row["recorded_by_name"] as string) ? "Unknown" : (string)row["recorded_by_name"]!;
-            owed[name] = owed.GetValueOrDefault(name) + (row["amount"] is decimal d ? d : 0m);
-        }
-
-        static IReadOnlyList<EntryDto> ToEntries(Dictionary<string, decimal> d) =>
-            d.Select(kv => new EntryDto(kv.Key, kv.Value)).OrderByDescending(e => e.Amount).ToList();
-
-        return new PendingDto(
-            ToEntries(held), held.Values.Sum(), online,
-            Convert.ToInt32(claims[0]["n"], System.Globalization.CultureInfo.InvariantCulture),
-            claims[0]["total"] is decimal t ? t : 0m,
-            ToEntries(owed), owed.Values.Sum());
+                cash.Balance + bank.Balance)));
     }
 
     private sealed class Side
@@ -291,17 +225,7 @@ public static class FundPositionEndpoint
         // Bundled in rather than served from /api/fund_transfers so the
         // dashboard costs one request here instead of two.
         [property: JsonPropertyName("recentTransfers")] IReadOnlyList<TransferRow> RecentTransfers,
-        [property: JsonPropertyName("total")] TotalDto Total,
-        [property: JsonPropertyName("pending")] PendingDto Pending);
-
-    private sealed record PendingDto(
-        [property: JsonPropertyName("heldByMembers")] IReadOnlyList<EntryDto> HeldByMembers,
-        [property: JsonPropertyName("heldTotal")] decimal HeldTotal,
-        [property: JsonPropertyName("onlinePending")] decimal OnlinePending,
-        [property: JsonPropertyName("pendingExpenses")] int PendingExpenses,
-        [property: JsonPropertyName("pendingExpensesTotal")] decimal PendingExpensesTotal,
-        [property: JsonPropertyName("owedToMembers")] IReadOnlyList<EntryDto> OwedToMembers,
-        [property: JsonPropertyName("owedTotal")] decimal OwedTotal);
+        [property: JsonPropertyName("total")] TotalDto Total);
 
     private sealed record EntryDto(
         [property: JsonPropertyName("name")] string Name,

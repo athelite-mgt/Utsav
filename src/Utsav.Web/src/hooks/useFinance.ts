@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, qs } from "@/lib/api";
 import type {
-  ApprovalItem, AdBookingWithAdvertiser, AdvanceWithBalance, AuditReport, BudgetVsActual, CashLedger,
+  AdBookingWithAdvertiser, AdvanceWithBalance, AuditReport, BudgetVsActual, CashLedger,
   CollectionPaymentRow, ContractWithStatus, DateCollectionRow, DocumentFile, Expense, FeastExpense, FeastWithDonor, FundBreakdown, FundPosition, FundTransfer, MyAdvanceSummary,
   ModeCollectionRow, NotificationDetail, NotificationItem, Offering, PujaCalendarDay, PujaScheduleItem, StreamCollectionRow, SpecialDonation, SubscriptionCategory, SubscriptionWithDonor, Vendor,
   VendorIssue, WorkflowItem, WorkflowNote, YearCollectionPayment, ZoneCollectionRow,
@@ -207,11 +207,3 @@ export const useAuditReport = (yearId?: string | null) =>
 // Small aggregate helper used across list pages / dashboard
 export const sum = <T,>(rows: T[], pick: (r: T) => number | null | undefined) =>
   rows.reduce((acc, r) => acc + (Number(pick(r)) || 0), 0);
-
-/** Finance's queue: every payment and expense still awaiting a decision, across all years. */
-export const useApprovals = (enabled = true) =>
-  useQuery({ queryKey: ["approvals"], enabled, queryFn: () => api.get<ApprovalItem[]>("/approvals"), refetchInterval: 60_000 });
-
-/** The signed-in member's own submissions that are waiting, were sent back, or were rejected. */
-export const useMyApprovals = () =>
-  useQuery({ queryKey: ["my_approvals"], queryFn: () => api.get<ApprovalItem[]>("/my/approvals") });

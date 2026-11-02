@@ -139,8 +139,6 @@ export function SubscriptionsSection({
   const { activeYearId, activeYear } = useYear();
   const { can } = useAuth();
   const canWrite = can("write_income");
-  // Members who may only record money can open a bill to add a payment; Finance reviews it.
-  const canRecord = canWrite || can("submit_money");
   const isDesktop = useIsDesktop();
   const { data = [], isLoading, isError, error } = useSubscriptions(activeYearId, category);
   const { remove, update } = useEntityMutations("subscriptions", ["subscriptions"], "Donor");
@@ -490,8 +488,8 @@ export function SubscriptionsSection({
                   {page.map((s) => (
                     <TableRow
                       key={s.id}
-                      className={cn(canRecord && "cursor-pointer", s.not_eligible && "bg-destructive/10 hover:bg-destructive/15")}
-                      onClick={() => canRecord && openEdit(s)}
+                      className={cn(canWrite && "cursor-pointer", s.not_eligible && "bg-destructive/10 hover:bg-destructive/15")}
+                      onClick={() => canWrite && openEdit(s)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-2.5">
@@ -518,13 +516,6 @@ export function SubscriptionsSection({
                         {/* The row itself opens the editor, so the buttons in
                             here must not also trigger it on their way up. */}
                         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          {canRecord && !canWrite && quickCollectButton(s)}
-                          {canRecord && !canWrite && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(s)}
-                              aria-label={`Record payment for ${s.donor?.name}`}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                          )}
                           {canWrite && (
                             <>
                               {quickCollectButton(s)}
@@ -552,7 +543,7 @@ export function SubscriptionsSection({
                 <Card
                   key={s.id}
                   className={cn("p-4", s.not_eligible && "border-destructive/30 bg-destructive/10")}
-                  onClick={() => canRecord && openEdit(s)}
+                  onClick={() => canWrite && openEdit(s)}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -570,7 +561,7 @@ export function SubscriptionsSection({
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <StatusBadge sub={s} />
-                      {canRecord && quickCollectButton(s)}
+                      {canWrite && quickCollectButton(s)}
                       {canWrite && moveButton(s)}
                     </div>
                   </div>

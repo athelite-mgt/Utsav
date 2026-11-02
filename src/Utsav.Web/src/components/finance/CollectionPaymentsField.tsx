@@ -5,9 +5,6 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { LookupSelect } from "@/components/form/OptionSelect";
-import { ApprovalBadge } from "@/components/finance/ApprovalBadge";
-import { isOpen } from "@/lib/approval";
-import type { ApprovalStatus } from "@/types/db";
 
 /** One editable instalment row in a collection. `key` is a stable client id for list rendering. */
 export interface PaymentDraft {
@@ -15,10 +12,6 @@ export interface PaymentDraft {
   amount: number;
   paid_on: string;
   mode: string | null;
-  /** Set on instalments loaded from the server; absent on ones added in this dialog. */
-  status?: ApprovalStatus;
-  decision_note?: string | null;
-  recorded_by_user_id?: string | null;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -43,11 +36,7 @@ export function CollectionPaymentsField({
   payments: PaymentDraft[];
   onChange: (next: PaymentDraft[]) => void;
 }) {
-  const { user, can } = useAuth();
-  const approver = can("approve_money");
-  // Confirmed money is Finance's to change, and so is anything another member recorded; a member may change only what they entered themselves and Finance has not yet decided.
-  const locked = (p: PaymentDraft) =>
-    !approver && p.status !== undefined && !(isOpen(p.status) && p.recorded_by_user_id === user?.id);
+  const { user } = useAuth();
   const total = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
 
   const update = (key: string, patch: Partial<PaymentDraft>) =>
@@ -71,15 +60,7 @@ export function CollectionPaymentsField({
       )}
 
       {payments.map((p) => (
-        <div key={p.key} className="space-y-1">
-        {(p.status && p.status !== "approved") && (
-          <div className="flex items-center gap-2">
-            <ApprovalBadge status={p.status} />
-            {p.decision_note && <span className="text-xs italic text-muted-foreground">“{p.decision_note}”</span>}
-          </div>
-        )}
-        <fieldset disabled={locked(p)} className={locked(p) ? "opacity-70" : undefined}>
-        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end sm:border-0 sm:p-0">
+        <div key={p.key} className="grid grid-cols-2 gap-2 rounded-lg border border-border p-2 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end sm:border-0 sm:p-0">
           <label className="space-y-1">
             <span className="text-[11px] text-muted-foreground sm:hidden">Amount</span>
             <MoneyInput step="1" value={p.amount || ""} onChange={(e) => update(p.key, { amount: Number(e.target.value) || 0 })} placeholder="Amount" />
@@ -97,8 +78,6 @@ export function CollectionPaymentsField({
             <Trash2 className="h-4 w-4" />
             <span className="sm:hidden">Remove instalment</span>
           </Button>
-        </div>
-        </fieldset>
         </div>
       ))}
 

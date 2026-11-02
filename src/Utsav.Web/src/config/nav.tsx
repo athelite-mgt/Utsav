@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, HandCoins, Megaphone, Sparkles, Gift,
   ReceiptText, PiggyBank, Truck, CalendarClock, ListChecks, Settings, Coins, History, BarChart3, FileArchive, Bell,
-  BrainCircuit, UtensilsCrossed, QrCode, ScanLine, ClipboardCheck,
+  BrainCircuit, UtensilsCrossed, QrCode, ScanLine,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import type { Permission } from "@/types/db";
@@ -41,7 +41,6 @@ export const navItems: NavItem[] = [
   { to: "/feast-expenses", label: "Feast Expenses", short: "Spend", icon: ReceiptText, group: "feast" },
   { to: "/feast-tokens", label: "Feast Tokens", short: "Tokens", icon: QrCode, group: "feast" },
   { to: "/feast-entry", label: "Feast Entry", short: "Entry", icon: ScanLine, group: "feast" },
-  { to: "/approvals", label: "Approvals", short: "Approve", icon: ClipboardCheck, group: "spending" },
   { to: "/expenses", label: "Expenses", short: "Spend", icon: ReceiptText, group: "spending" },
   { to: "/advances", label: "Cash Advances", short: "Advances", icon: HandCoins, group: "spending" },
   { to: "/vendors", label: "Vendors & Contracts", short: "Vendors", icon: Truck, group: "spending" },

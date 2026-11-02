@@ -95,7 +95,7 @@ internal static class ToolCatalogue
                        COUNT(s.id) AS donors,
                        ISNULL(SUM(s.projected), 0) AS projected,
                        ISNULL(SUM(s.billed), 0) AS billed,
-                       ISNULL(SUM((ISNULL(s.collected, 0) - ISNULL(s.pending_collected, 0))), 0) AS collected,
+                       ISNULL(SUM(s.collected), 0) AS collected,
                        ISNULL(SUM(s.billed), 0) - ISNULL(SUM(s.collected), 0) AS outstanding,
                        CASE WHEN ISNULL(SUM(s.projected), 0) = 0 THEN 0
                             ELSE CAST(100.0 * SUM(s.collected) / SUM(s.projected) AS DECIMAL(6,2))
@@ -127,7 +127,7 @@ internal static class ToolCatalogue
                        s.category,
                        ISNULL(s.projected, 0) AS projected,
                        ISNULL(s.billed, 0) AS billed,
-                       (ISNULL(s.collected, 0) - ISNULL(s.pending_collected, 0)) AS collected,
+                       ISNULL(s.collected, 0) AS collected,
                        ISNULL(s.billed, 0) - ISNULL(s.collected, 0) AS outstanding,
                        s.collected_on
                 FROM donors d
@@ -152,7 +152,7 @@ internal static class ToolCatalogue
                        c.name AS collector,
                        COUNT(s.id) AS donors,
                        ISNULL(SUM(s.billed), 0) AS billed,
-                       ISNULL(SUM((ISNULL(s.collected, 0) - ISNULL(s.pending_collected, 0))), 0) AS collected,
+                       ISNULL(SUM(s.collected), 0) AS collected,
                        ISNULL(SUM(s.billed), 0) - ISNULL(SUM(s.collected), 0) AS outstanding
                 FROM collectors c
                 LEFT JOIN subscriptions s ON s.collector_id = c.id AND s.org_id = @orgId
@@ -177,7 +177,7 @@ internal static class ToolCatalogue
                        z.name AS zone,
                        d.contact,
                        ISNULL(s.billed, 0) AS billed,
-                       (ISNULL(s.collected, 0) - ISNULL(s.pending_collected, 0)) AS collected,
+                       ISNULL(s.collected, 0) AS collected,
                        ISNULL(s.billed, 0) - ISNULL(s.collected, 0) AS outstanding,
                        s.collected_on
                 FROM subscriptions s
@@ -205,7 +205,7 @@ internal static class ToolCatalogue
                        s.bill_no,
                        s.billed_on,
                        ISNULL(s.billed, 0) AS billed,
-                       (ISNULL(s.collected, 0) - ISNULL(s.pending_collected, 0)) AS collected,
+                       ISNULL(s.collected, 0) AS collected,
                        ISNULL(s.billed, 0) - ISNULL(s.collected, 0) AS outstanding,
                        DATEDIFF(day, TRY_CONVERT(date, s.billed_on), GETDATE()) AS days_since_billed
                 FROM subscriptions s
@@ -230,15 +230,15 @@ internal static class ToolCatalogue
             Sql: $"""
                 {Year}
                 SELECT 'Chanda (membership)' AS source,
-                       ISNULL((SELECT SUM(ISNULL(collected, 0) - ISNULL(pending_collected, 0)) FROM subscriptions
+                       ISNULL((SELECT SUM(collected) FROM subscriptions
                                WHERE org_id = @orgId AND year_id IN (SELECT id FROM y)), 0) AS collected
                 UNION ALL
                 SELECT 'Advertisements',
-                       ISNULL((SELECT SUM(ISNULL(collected, 0) - ISNULL(pending_collected, 0)) FROM ad_bookings
+                       ISNULL((SELECT SUM(collected) FROM ad_bookings
                                WHERE org_id = @orgId AND year_id IN (SELECT id FROM y)), 0)
                 UNION ALL
                 SELECT 'Special donations',
-                       ISNULL((SELECT SUM(ISNULL(collected, 0) - ISNULL(pending_collected, 0)) FROM special_donations
+                       ISNULL((SELECT SUM(collected) FROM special_donations
                                WHERE org_id = @orgId AND year_id IN (SELECT id FROM y)), 0)
                 UNION ALL
                 SELECT 'Offerings (value)',
@@ -258,7 +258,7 @@ internal static class ToolCatalogue
                 {Year}
                 SELECT FORMAT({CollectedDate}, 'yyyy-MM') AS month,
                        COUNT(*) AS payments,
-                       ISNULL(SUM((ISNULL(s.collected, 0) - ISNULL(s.pending_collected, 0))), 0) AS collected
+                       ISNULL(SUM(s.collected), 0) AS collected
                 FROM subscriptions s
                 WHERE s.org_id = @orgId
                   AND s.year_id IN (SELECT id FROM y)
@@ -289,7 +289,7 @@ internal static class ToolCatalogue
                 LEFT JOIN (
                     SELECT category, SUM(amount) AS actual
                     FROM expenses
-                    WHERE status = 'approved' AND org_id = @orgId AND year_id IN (SELECT id FROM y)
+                    WHERE org_id = @orgId AND year_id IN (SELECT id FROM y)
                     GROUP BY category
                 ) e ON e.category = b.category
                 WHERE b.org_id = @orgId AND b.year_id IN (SELECT id FROM y)
@@ -310,7 +310,7 @@ internal static class ToolCatalogue
                 SELECT e.category AS category,
                        COUNT(*) AS bills,
                        ISNULL(SUM(e.amount), 0) AS amount
-                FROM (SELECT * FROM expenses WHERE status = 'approved') e
+                FROM expenses e
                 WHERE e.org_id = @orgId AND e.year_id IN (SELECT id FROM y)
                 GROUP BY e.category
                 ORDER BY amount DESC
@@ -333,7 +333,7 @@ internal static class ToolCatalogue
                        e.bill_no,
                        e.mode,
                        ISNULL(e.amount, 0) AS amount
-                FROM (SELECT * FROM expenses WHERE status = 'approved') e
+                FROM expenses e
                 LEFT JOIN vendors v ON v.id = e.vendor_id AND v.org_id = @orgId
                 WHERE e.org_id = @orgId
                   AND e.year_id IN (SELECT id FROM y)
@@ -356,7 +356,7 @@ internal static class ToolCatalogue
                        COUNT(e.id) AS bills,
                        ISNULL(SUM(e.amount), 0) AS paid
                 FROM vendors v
-                LEFT JOIN expenses e ON e.vendor_id = v.id AND e.org_id = @orgId AND e.status = 'approved'
+                LEFT JOIN expenses e ON e.vendor_id = v.id AND e.org_id = @orgId
                      AND e.year_id IN (SELECT id FROM y)
                 WHERE v.org_id = @orgId
                 GROUP BY v.name, v.category
@@ -410,14 +410,14 @@ internal static class ToolCatalogue
                 SELECT py.year,
                        py.name AS year_name,
                        ISNULL(py.target, 0) AS target,
-                       ISNULL((SELECT SUM(ISNULL(collected, 0) - ISNULL(pending_collected, 0)) FROM subscriptions
+                       ISNULL((SELECT SUM(collected) FROM subscriptions
                                WHERE org_id = @orgId AND year_id = py.id), 0)
-                     + ISNULL((SELECT SUM(ISNULL(collected, 0) - ISNULL(pending_collected, 0)) FROM ad_bookings
+                     + ISNULL((SELECT SUM(collected) FROM ad_bookings
                                WHERE org_id = @orgId AND year_id = py.id), 0)
-                     + ISNULL((SELECT SUM(ISNULL(collected, 0) - ISNULL(pending_collected, 0)) FROM special_donations
+                     + ISNULL((SELECT SUM(collected) FROM special_donations
                                WHERE org_id = @orgId AND year_id = py.id), 0) AS total_income,
                        ISNULL((SELECT SUM(amount) FROM expenses
-                               WHERE status = 'approved' AND org_id = @orgId AND year_id = py.id), 0) AS total_spent,
+                               WHERE org_id = @orgId AND year_id = py.id), 0) AS total_spent,
                        ISNULL((SELECT SUM(forecast) FROM budget_lines
                                WHERE org_id = @orgId AND year_id = py.id), 0) AS total_budgeted
                 FROM puja_years py

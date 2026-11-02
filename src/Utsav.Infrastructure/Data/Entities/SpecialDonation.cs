@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace Utsav.Infrastructure.Data.Entities;
@@ -22,9 +22,6 @@ public partial class SpecialDonation
     public decimal? Billed { get; set; }
 
     public decimal? Collected { get; set; }
-
-    /// <summary>Part of <see cref="Collected"/> still waiting for Finance's approval (pending or sent back).</summary>
-    public decimal PendingCollected { get; set; }
 
     public decimal? Due { get; set; }
 

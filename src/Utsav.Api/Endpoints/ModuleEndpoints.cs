@@ -31,7 +31,7 @@ public static class ModuleEndpoints
         var writeWorkflow = app.MapGroup("/api").RequirePermission(Permission.WriteWorkflow);
 
         member.MapGet("/subscriptions", SubscriptionsAsync);
-        member.MapGet("/feasts", FeastsAsync).AddEndpointFilter(FeastSwitch.RequireOn);
+        member.MapGet("/feasts", FeastsAsync);
         member.MapGet("/ad_bookings", AdBookingsAsync);
         member.MapGet("/special_donations", (Guid year_id, UtsavDbContext db, CancellationToken ct) =>
             RowsAsync(db, "SELECT * FROM special_donations WHERE year_id=@year AND org_id=@org ORDER BY created_at", year_id, ct));
@@ -52,7 +52,7 @@ public static class ModuleEndpoints
                   FROM feast_expenses e LEFT JOIN vendors v ON v.id = e.vendor_id
                  WHERE e.year_id=@year AND e.org_id=@org
                  ORDER BY e.spent_on DESC, e.created_at DESC
-                """, year_id, ct)).AddEndpointFilter(FeastSwitch.RequireOn);
+                """, year_id, ct));
 
         // Budget and cash ledger stay readable by any active member: the
         // Dashboard summarises both, and viewers can see the Dashboard.
