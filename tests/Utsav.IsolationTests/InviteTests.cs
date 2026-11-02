@@ -116,3 +116,52 @@ public class InviteTests(DatabaseFixture fixture)
         Assert.NotEqual(HttpStatusCode.OK, (await invitee.PostAsJsonAsync("/api/auth/redeem-invite", new { code = first })).StatusCode);
     }
 }
+
+/// <summary>Changing the yearly raise, then re-applying it to every membership ask. Run in committee C.</summary>
+[Collection(nameof(DatabaseFixture))]
+public class ProjectionRecalculationTests(DatabaseFixture fixture)
+{
+    private static async Task<JsonElement> JsonAsync(HttpResponseMessage r) => await r.Content.ReadFromJsonAsync<JsonElement>();
+
+    private async Task<Guid> BillAsync(HttpClient admin, string category, decimal prior, decimal projected)
+    {
+        var donor = await JsonAsync(await admin.PostAsJsonAsync("/api/donors", new { name = "Proj " + Guid.NewGuid().ToString("N")[..6] }));
+        var bill = await admin.PostAsJsonAsync("/api/subscriptions", new
+        {
+            donor_id = donor.GetProperty("id").GetGuid(), year_id = fixture.C.Year, category, prior_billed = prior, projected,
+        });
+        Assert.True(bill.StatusCode == HttpStatusCode.OK, await bill.Content.ReadAsStringAsync());
+        return (await JsonAsync(bill)).GetProperty("id").GetGuid();
+    }
+
+    [Fact]
+    public async Task Recalculating_applies_the_raise_to_membership_asks_only()
+    {
+        using var admin = fixture.ClientFor(fixture.TokenForC);
+        var membership = await BillAsync(admin, "membership", 1000, 1000);
+        var special = await BillAsync(admin, "special", 500, 500);
+        var noPrior = await BillAsync(admin, "membership", 0, 321);
+        await admin.PatchAsJsonAsync($"/api/puja_years/{fixture.C.Year}", new { projection_pct = 12.5 });
+
+        var response = await admin.PostAsJsonAsync($"/api/puja_years/{fixture.C.Year}/recalculate_projections", new { });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var db = fixture.ContextFor(fixture.TenantC);
+        Assert.Equal(1125m, (await db.Subscriptions.SingleAsync(s => s.Id == membership)).Projected);
+        Assert.Equal(500m, (await db.Subscriptions.SingleAsync(s => s.Id == special)).Projected);
+        Assert.Equal(321m, (await db.Subscriptions.SingleAsync(s => s.Id == noPrior)).Projected);
+    }
+
+    [Fact]
+    public async Task Only_an_admin_can_recalculate_and_another_committees_year_is_not_found()
+    {
+        var (_, token) = await fixture.NewMemberAsync("proj-fin", [(fixture.TenantC, "finance", "active")], fixture.TenantC);
+        using var finance = fixture.ClientFor(token);
+        using var admin = fixture.ClientFor(fixture.TokenForC);
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await finance.PostAsJsonAsync($"/api/puja_years/{fixture.C.Year}/recalculate_projections", new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await admin.PostAsJsonAsync($"/api/puja_years/{fixture.A.Year}/recalculate_projections", new { })).StatusCode);
+    }
+}

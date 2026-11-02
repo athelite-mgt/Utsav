@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   Settings as Cog, Plus, Trash2, ShieldCheck, X, CalendarDays, Users, MapPin,
   ListChecks, UserCog, Building2, ArrowRightCircle, Check, UserPlus, Ban, Smartphone, Megaphone,
-  KeyRound, Copy, Pencil, Send,
+  KeyRound, Copy, Pencil, Send, RefreshCw,
 } from "lucide-react";
 import { InviteLinkCard } from "@/components/auth/InviteLinkCard";
 import { api, qs } from "@/lib/api";
@@ -163,6 +163,16 @@ function YearSettings() {
     onError: (e: unknown) => toast.error((e as Error).message),
   });
 
+  // After changing the raise: re-apply it to every membership ask for that year.
+  const recalc = useMutation({
+    mutationFn: (id: string) => api.post<{ updated: number; projection_pct: number }>(`/puja_years/${id}/recalculate_projections`, {}),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] });
+      toast.success(`Updated ${r.updated} projection${r.updated === 1 ? "" : "s"} to last year's bill + ${r.projection_pct}%`);
+    },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
   const newestYear = years[0]; // ordered by year DESC from the API
 
   return (
@@ -203,6 +213,17 @@ function YearSettings() {
               {y.is_active
                 ? <Badge variant="success" className="h-9 px-3"><ShieldCheck className="mr-1 h-3.5 w-3.5" /> Active</Badge>
                 : <Button variant="outline" onClick={() => setActive.mutate(y.id)}>Set active</Button>}
+              <ConfirmDialog
+                title={`Recalculate ${y.year} projections?`}
+                description={`Sets every membership donor's projected ask to last year's bill plus ${y.projection_pct}%. Special donations and donors with no bill last year are left as they are. Bills already raised are not changed.`}
+                confirmLabel="Recalculate"
+                onConfirm={async () => { await recalc.mutateAsync(y.id); }}
+                trigger={
+                  <Button variant="outline" disabled={recalc.isPending} title="Re-apply the raise to every membership projection">
+                    <RefreshCw className="h-4 w-4" /> Recalculate projections
+                  </Button>
+                }
+              />
               {y.id === newestYear?.id && (
                 <Button variant="outline" onClick={() => setRolloverFrom(y)}>
                   <ArrowRightCircle className="h-4 w-4" /> Start {y.year + 1}
@@ -820,10 +841,11 @@ export function SettingsPage() {
   // off this page entirely; this only decides which tabs someone who does
   // have one of the two (but maybe not both — Secretariat has manage_users,
   // not manage_settings) actually gets to see.
+  const [tab, setTab] = useState<string | undefined>(undefined);
   const tabs = [
     manageSettings && { v: "year", label: "Puja Year", icon: CalendarDays, node: <YearSettings /> },
     manageUsers && { v: "requests", label: "Access Requests", icon: UserPlus, node: <AccessRequestsSettings /> },
-    manageUsers && { v: "invites", label: "Invitations", icon: Send, node: <InvitationsSettings /> },
+    manageUsers && { v: "invites", label: "Invite People", icon: Send, node: <InvitationsSettings /> },
     manageUsers && { v: "users", label: "Users & Roles", icon: UserCog, node: <UserSettings /> },
     manageSettings && { v: "collectors", label: "Collectors", icon: Users, node: <CollectorSettings /> },
     manageSettings && { v: "zones", label: "Zones", icon: MapPin, node: <ZoneSettings /> },
@@ -839,7 +861,7 @@ export function SettingsPage() {
   return (
     <div className="space-y-5">
       <PageHeader title="Settings" description="Manage your committee configuration" icon={<Cog />} />
-      <Tabs defaultValue={tabs[0]?.v}>
+      <Tabs value={tab ?? tabs[0]?.v} onValueChange={setTab}>
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 overflow-x-auto p-1">
           {tabs.map((t) => (
             <TabsTrigger key={t.v} value={t.v} className="gap-1.5">
@@ -850,9 +872,14 @@ export function SettingsPage() {
         {tabs.map((t) => (
           <TabsContent key={t.v} value={t.v}>
             <Card>
-              <CardHeader>
-                <CardTitle>{t.label}</CardTitle>
-                <CardDescription>Changes apply across the app immediately.</CardDescription>
+              <CardHeader className="flex-row items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <CardTitle>{t.label}</CardTitle>
+                  <CardDescription>Changes apply across the app immediately.</CardDescription>
+                </div>
+                {manageUsers && (t.v === "requests" || t.v === "users") && (
+                  <Button size="sm" onClick={() => setTab("invites")}><Send /> Invite someone</Button>
+                )}
               </CardHeader>
               <CardContent>{t.node}</CardContent>
             </Card>

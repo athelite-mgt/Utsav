@@ -48,6 +48,7 @@ public static class AdminEndpoints
         manageUsers.MapPatch("/users/{id:guid}", ChangeRoleAsync);
         manageSettings.MapPatch("/organizations/current", RenameCommitteeAsync);
         manageSettings.MapPost("/puja_years/{id:guid}/rollover", RolloverAsync);
+        manageSettings.MapPost("/puja_years/{id:guid}/recalculate_projections", RecalculateProjectionsAsync);
 
         return app;
     }
@@ -178,6 +179,31 @@ public static class AdminEndpoints
             logo_url = BrandingUrls.LogoUrl(org.Id, org.LogoBlob),
             feast_enabled = org.FeastEnabled,
         });
+    }
+
+    /// <summary>
+    /// Re-applies the year's yearly raise to this year's membership asks: each household's
+    /// <c>projected</c> becomes last year's bill plus the raise, exactly as the rollover
+    /// computed it. Run after changing the raise. Special donations (negotiated gift by gift)
+    /// and donors with no bill last year (their ask was typed by hand) are left alone.
+    /// </summary>
+    private static async Task<IResult> RecalculateProjectionsAsync(Guid id, UtsavDbContext db, CancellationToken ct)
+    {
+        var year = (await QueryAsync(db, "SELECT projection_pct FROM puja_years WHERE id=@id AND org_id=@org",
+            [P("@id", id), Org(db)], ct)).FirstOrDefault();
+        if (year is null)
+        {
+            return Results.Json(new { error = "No such puja year." }, statusCode: 404);
+        }
+
+        var pct = Convert.ToDecimal(year["projection_pct"]);
+        var updated = await DynamicSql.ExecuteAsync(db, """
+            UPDATE subscriptions
+               SET projected = ROUND(prior_billed * (1 + @pct / 100.0), 2)
+             WHERE year_id = @year AND org_id = @org AND category = 'membership' AND ISNULL(prior_billed, 0) > 0
+            """, [P("@pct", pct), P("@year", id), Org(db)], ct);
+
+        return Results.Ok(new { updated, projection_pct = pct });
     }
 
     /// <summary>
