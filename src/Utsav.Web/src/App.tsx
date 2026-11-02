@@ -2,6 +2,7 @@ import { type ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { feastEnabled } from "@/lib/approval";
 import { YearProvider } from "@/context/YearContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { AppLogoTile } from "@/components/brand/Athelite";
@@ -32,6 +33,7 @@ import { VendorsPage } from "@/pages/Vendors";
 import { DocumentsPage } from "@/pages/Documents";
 import { NotificationsPage } from "@/pages/Notifications";
 import { AdvancesPage } from "@/pages/Advances";
+import { ApprovalsPage } from "@/pages/Approvals";
 import { SchedulePage } from "@/pages/Schedule";
 import { WorkflowPage } from "@/pages/Workflow";
 import { SettingsPage } from "@/pages/Settings";
@@ -69,6 +71,12 @@ function SettingsRoute({ children }: { children: ReactNode }) {
 function AsuraRoute({ children }: { children: ReactNode }) {
   const { can } = useAuth();
   return can("use_asura") ? <>{children}</> : <Navigate to="/" replace />;
+}
+
+/** Feast is optional per committee; a hand-typed /feast on a committee that switched it off goes home. */
+function FeastRoute({ children }: { children: ReactNode }) {
+  const { org } = useAuth();
+  return feastEnabled(org) ? <>{children}</> : <Navigate to="/" replace />;
 }
 
 /** The audit trail is Admin/Secretariat only — see PermissionMatrix.cs. */
@@ -120,16 +128,17 @@ function AppContent() {
           <Route path="/membership" element={<MembershipPage />} />
           <Route path="/ads" element={<AdsPage />} />
           <Route path="/special-donations" element={<SpecialDonationPage />} />
-          <Route path="/feast" element={<FeastPage />} />
-          <Route path="/feast-expenses" element={<FeastExpensesPage />} />
-          <Route path="/feast-tokens" element={<FeastTokensPage />} />
-          <Route path="/feast-entry" element={<FeastEntryPage />} />
+          <Route path="/feast" element={<FeastRoute><FeastPage /></FeastRoute>} />
+          <Route path="/feast-expenses" element={<FeastRoute><FeastExpensesPage /></FeastRoute>} />
+          <Route path="/feast-tokens" element={<FeastRoute><FeastTokensPage /></FeastRoute>} />
+          <Route path="/feast-entry" element={<FeastRoute><FeastEntryPage /></FeastRoute>} />
           <Route path="/other-incomes" element={<OtherIncomesPage />} />
           <Route path="/offerings" element={<OfferingsPage />} />
           {/* Both sections were renamed; installed PWAs and bookmarks still
               point at the old paths. */}
           <Route path="/chanda" element={<Navigate to="/membership" replace />} />
           <Route path="/special" element={<Navigate to="/other-incomes" replace />} />
+          <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/expenses" element={<ExpensesPage />} />
           <Route path="/budget" element={<BudgetPage />} />
           <Route path="/vendors" element={<VendorsPage />} />

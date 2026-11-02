@@ -44,7 +44,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> ForYearAsync(Guid year_id, string? parent_type, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.CollectionPayments.AsNoTracking()
-            .Where(p => p.OrgId == db.TenantId && p.YearId == year_id
+            .Where(p => p.OrgId == db.TenantId && p.YearId == year_id && p.Status != "rejected"
                 && (parent_type == null || p.ParentType == parent_type))
             .Select(p => new { parent_id = p.ParentId, amount = p.Amount, paid_on = p.PaidOn, mode = p.Mode })
             .ToListAsync(ct);
@@ -220,7 +220,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> ListAsync(string parent_type, Guid parent_id, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.CollectionPayments.AsNoTracking()
-            .Where(p => p.OrgId == db.TenantId && p.ParentType == parent_type && p.ParentId == parent_id)
+            .Where(p => p.OrgId == db.TenantId && p.ParentType == parent_type && p.ParentId == parent_id && p.Status != "rejected")
             .OrderBy(p => p.PaidOn)
             .Select(p => new
             {
@@ -229,6 +229,9 @@ public static class CollectionEndpoints
                 paid_on = p.PaidOn,
                 mode = p.Mode,
                 recorded_by_name = p.RecordedByName,
+                recorded_by_user_id = p.RecordedByUserId,
+                status = p.Status,
+                decision_note = p.DecisionNote,
             })
             .ToListAsync(ct);
 

@@ -12,6 +12,8 @@ import { exportCsv } from "@/lib/exportCsv";
 import { exportPdfTable } from "@/lib/exportPdf";
 import { onInvalidFocus } from "@/lib/formErrors";
 import type { Expense } from "@/types/db";
+import { canEditOwnClaim, isApproved, isOpen } from "@/lib/approval";
+import { ApprovalBadge } from "@/components/finance/ApprovalBadge";
 import { PageHeader } from "@/components/common/PageHeader";
 import { SummaryBar } from "@/components/common/SummaryBar";
 import { FilterMenu, FilterField, FILTER_INPUT_CLS as SELECT_CLS } from "@/components/common/FilterMenu";
@@ -43,8 +45,9 @@ interface FormValues {
   mode: string | null;
   comment: string;
   bill_no: string;
+  paid_from: "fund" | "own_pocket";
 }
-const empty: FormValues = { category: null, details: "", amount: 0, spent_on: "", mode: null, comment: "", bill_no: "" };
+const empty: FormValues = { category: null, details: "", amount: 0, spent_on: "", mode: null, comment: "", bill_no: "", paid_from: "fund" };
 
 function ExpenseDialog({
   open, onOpenChange, expense, yearId,
@@ -52,6 +55,9 @@ function ExpenseDialog({
   const { create, update } = useEntityMutations("expenses", ["expenses", "budget_lines"], "Expense");
   const { register, handleSubmit, reset, watch, setValue, setFocus } = useForm<FormValues>({ defaultValues: empty });
   const { data: budgetLines = [] } = useBudget(yearId);
+  const { can } = useAuth();
+  // Anyone but Finance/Admin files a claim that waits for approval.
+  const waitsForApproval = !can("approve_money");
   const selectedCategory = watch("category");
   const budgetLine = budgetLines.find((b) => b.category === selectedCategory);
 
@@ -59,7 +65,7 @@ function ExpenseDialog({
     reset(expense
       ? { category: expense.category, details: expense.details ?? "", amount: expense.amount,
           spent_on: expense.spent_on ?? "", mode: expense.mode, comment: expense.comment ?? "",
-          bill_no: expense.bill_no ?? "" }
+          bill_no: expense.bill_no ?? "", paid_from: expense.paid_from ?? "fund" }
       : empty);
   }, [expense, open, reset]);
 
@@ -128,9 +134,25 @@ function ExpenseDialog({
                 onChange={(v) => setValue("mode", v)} placeholder="Payment mode" allowClear />
             </Field>
           </div>
+          <Field label="Paid from">
+            <select {...register("paid_from")} className={SELECT_CLS}>
+              <option value="fund">Committee money (cash box / bank)</option>
+              <option value="own_pocket">My own pocket — the committee owes me</option>
+            </select>
+          </Field>
           <Field label="Comment">
             <Textarea {...register("comment")} rows={2} />
           </Field>
+          {expense?.decision_note && expense.status === "sent_back" && (
+            <p className="rounded-lg bg-orange-500/10 px-3 py-2 text-xs text-orange-700 dark:text-orange-400">
+              Finance sent this back: “{expense.decision_note}”. Fix it and save to send it again.
+            </p>
+          )}
+          {waitsForApproval && (
+            <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+              Finance will review this before it counts as spent.
+            </p>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             {!expense && (
@@ -151,8 +173,11 @@ function ExpenseDialog({
 
 export function ExpensesPage() {
   const { activeYearId } = useYear();
-  const { can } = useAuth();
-  const canWrite = can("write_finance");
+  const { can, user } = useAuth();
+  // Anyone who may record money can add an expense; whether it can then be changed depends on the entry.
+  const canWrite = can("submit_money");
+  const canExport = can("write_finance");
+  const canManage = (e: Expense) => can("approve_money") || canEditOwnClaim(e, user?.id);
   const { data = [], isLoading, isError, error } = useExpenses(activeYearId);
   const { remove } = useEntityMutations("expenses", ["expenses", "budget_lines"], "Expense");
   const [search, setSearch] = useState("");
@@ -178,8 +203,11 @@ export function ExpensesPage() {
     });
   }, [data, search, category, voucherFilter]);
 
-  const total = sum(filtered, (e) => e.amount);
-  const biggest = [...filtered].sort((a, b) => b.amount - a.amount)[0];
+  // Only approved claims count as spent; the rest is shown apart.
+  const counted = filtered.filter(isApproved);
+  const total = sum(counted, (e) => e.amount);
+  const awaiting = sum(filtered.filter((e) => isOpen(e.status)), (e) => e.amount);
+  const biggest = [...counted].sort((a, b) => b.amount - a.amount)[0];
 
   const { sorted, sortKey, sortDir, toggleSort } = useSort<Expense>(filtered, {
     spent_on: (e) => e.spent_on,
@@ -195,6 +223,7 @@ export function ExpensesPage() {
         title="Expenses" description="All committee spending" icon={<ReceiptText />}
         actions={canWrite && (
           <>
+            {canExport && <>
             <Button variant="outline" size="icon" title="Export CSV"
               onClick={() => exportCsv("expenses", sorted.map((e) => ({
                 Category: e.category, Details: e.details, "Bill No": e.bill_no, Amount: e.amount, Date: e.spent_on, Mode: e.mode, Comment: e.comment,
@@ -222,6 +251,7 @@ export function ExpensesPage() {
               })}>
               <FileDown className="h-4 w-4" />
             </Button>
+            </>}
             <Button onClick={() => { setEditing(null); setOpen(true); }}>
               <Plus /> <span className="hidden sm:inline">Add expense</span>
             </Button>
@@ -231,6 +261,7 @@ export function ExpensesPage() {
 
       <SummaryBar items={[
         { label: "Total Spent", value: total, tone: "primary" },
+        ...(awaiting > 0 ? [{ label: "Awaiting approval", value: awaiting, tone: "primary" as const }] : []),
         { label: "Entries", value: filtered.length, isMoney: false },
         { label: "Categories", value: categories.length, isMoney: false },
         { label: "Largest", value: biggest?.amount ?? 0 },
@@ -276,7 +307,7 @@ export function ExpensesPage() {
 
       {!canWrite && (
         <p className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
-          <Lock className="h-3.5 w-3.5" /> View only — expenses are managed by the committee admin.
+          <Lock className="h-3.5 w-3.5" /> View only — ask a committee member with finance access to record expenses.
         </p>
       )}
 
@@ -291,8 +322,12 @@ export function ExpensesPage() {
             {sorted.map((e) => (
               <div
                 key={e.id}
-                className={cn("flex items-center gap-3 p-3.5 sm:px-4", canWrite && "cursor-pointer hover:bg-muted/40")}
-                onClick={() => canWrite && openEdit(e)}
+                className={cn(
+                  "flex items-center gap-3 p-3.5 sm:px-4",
+                  canManage(e) && "cursor-pointer hover:bg-muted/40",
+                  e.status === "rejected" && "opacity-60",
+                )}
+                onClick={() => canManage(e) && openEdit(e)}
               >
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <ReceiptText className="h-5 w-5" />
@@ -301,13 +336,22 @@ export function ExpensesPage() {
                   <div className="flex items-center gap-2">
                     <p className="truncate font-medium">{e.category ?? "Uncategorised"}</p>
                     {e.mode && <Badge variant="outline" className="hidden sm:inline-flex">{e.mode}</Badge>}
+                    <ApprovalBadge status={e.status} />
+                    {e.paid_from === "own_pocket" && (
+                      <Badge variant="outline" className="hidden sm:inline-flex">
+                        {e.refunded_on ? "Refunded" : "Paid by member"}
+                      </Badge>
+                    )}
                   </div>
                   <p className="truncate text-xs text-muted-foreground">
-                    {e.details || "—"} · {fmtDate(e.spent_on)}
+                    {e.details || "—"} · {fmtDate(e.spent_on)}{e.recorded_by_name ? ` · ${e.recorded_by_name}` : ""}
                   </p>
+                  {e.decision_note && (e.status === "sent_back" || e.status === "rejected") && (
+                    <p className="truncate text-xs italic text-muted-foreground">“{e.decision_note}”</p>
+                  )}
                 </div>
-                <p className="shrink-0 font-semibold tabular">{money(e.amount)}</p>
-                {canWrite && (
+                <p className={cn("shrink-0 font-semibold tabular", e.status === "rejected" && "line-through")}>{money(e.amount)}</p>
+                {canManage(e) && (
                   <div className="flex shrink-0 gap-0.5" onClick={(ev) => ev.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)}>
                       <Pencil className="h-4 w-4" />

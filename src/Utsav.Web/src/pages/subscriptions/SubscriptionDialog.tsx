@@ -127,6 +127,9 @@ export function SubscriptionDialog({
         amount: Number(p.amount) || 0,
         paid_on: p.paid_on ?? today(),
         mode: p.mode,
+        status: p.status,
+        decision_note: p.decision_note,
+        recorded_by_user_id: p.recorded_by_user_id,
       })));
     }
   }, [existingPayments, open, sub]);
