@@ -165,10 +165,12 @@ function YearSettings() {
 
   // After changing the raise: re-apply it to every membership ask for that year.
   const recalc = useMutation({
-    mutationFn: (id: string) => api.post<{ updated: number; projection_pct: number }>(`/puja_years/${id}/recalculate_projections`, {}),
+    mutationFn: (id: string) => api.post<{ updated: number; skipped: number; projection_pct: number }>(`/puja_years/${id}/recalculate_projections`, {}),
     onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ["subscriptions"] });
-      toast.success(`Updated ${r.updated} projection${r.updated === 1 ? "" : "s"} to last year's bill + ${r.projection_pct}%`);
+      qc.invalidateQueries({ queryKey: ["subscriptions"], refetchType: "all" });
+      const skipped = r.skipped > 0 ? ` ${r.skipped} donor${r.skipped === 1 ? " has" : "s have"} no bill last year, so ${r.skipped === 1 ? "it was" : "they were"} left as typed.` : "";
+      if (r.updated === 0) toast.warning(`Nothing to recalculate — no membership donor has a bill from last year to raise.${skipped}`);
+      else toast.success(`Updated ${r.updated} membership projection${r.updated === 1 ? "" : "s"} to last year's bill + ${r.projection_pct}%.${skipped}`);
     },
     onError: (e: unknown) => toast.error((e as Error).message),
   });

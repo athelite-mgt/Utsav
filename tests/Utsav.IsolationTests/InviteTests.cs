@@ -146,6 +146,9 @@ public class ProjectionRecalculationTests(DatabaseFixture fixture)
         var response = await admin.PostAsJsonAsync($"/api/puja_years/{fixture.C.Year}/recalculate_projections", new { });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var result = await JsonAsync(response);
+        Assert.True(result.GetProperty("updated").GetInt32() >= 1);
+        Assert.True(result.GetProperty("skipped").GetInt32() >= 1);   // the membership donor with no bill last year
         await using var db = fixture.ContextFor(fixture.TenantC);
         Assert.Equal(1125m, (await db.Subscriptions.SingleAsync(s => s.Id == membership)).Projected);
         Assert.Equal(500m, (await db.Subscriptions.SingleAsync(s => s.Id == special)).Projected);

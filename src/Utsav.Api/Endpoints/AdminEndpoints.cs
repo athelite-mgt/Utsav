@@ -203,7 +203,14 @@ public static class AdminEndpoints
              WHERE year_id = @year AND org_id = @org AND category = 'membership' AND ISNULL(prior_billed, 0) > 0
             """, [P("@pct", pct), P("@year", id), Org(db)], ct);
 
-        return Results.Ok(new { updated, projection_pct = pct });
+        // Membership donors with no bill last year are skipped (their ask is typed by hand) —
+        // say how many, so "nothing changed" is explainable.
+        var skipped = Convert.ToInt32((await QueryAsync(db, """
+            SELECT COUNT(*) AS n FROM subscriptions
+             WHERE year_id = @year AND org_id = @org AND category = 'membership' AND ISNULL(prior_billed, 0) = 0
+            """, [P("@year", id), Org(db)], ct))[0]["n"], System.Globalization.CultureInfo.InvariantCulture);
+
+        return Results.Ok(new { updated, skipped, projection_pct = pct });
     }
 
     /// <summary>
