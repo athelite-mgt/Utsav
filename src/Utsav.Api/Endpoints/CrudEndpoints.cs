@@ -48,6 +48,10 @@ public static class CrudEndpoints
         {
             return Results.Json(new { error = "Unknown resource" }, statusCode: 404);
         }
+        if (FeastSwitch.Tables.Contains(safeTable) && !await FeastSwitch.IsOnAsync(db, ct))
+        {
+            return FeastSwitch.Off();
+        }
         if (Forbidden(user, safeTable) is { } forbidden)
         {
             return forbidden;
@@ -90,6 +94,10 @@ public static class CrudEndpoints
         {
             return Results.Json(new { error = "Unknown resource" }, statusCode: 404);
         }
+        if (FeastSwitch.Tables.Contains(safeTable) && !await FeastSwitch.IsOnAsync(db, ct))
+        {
+            return FeastSwitch.Off();
+        }
         if (Forbidden(user, safeTable) is { } forbidden)
         {
             return forbidden;
@@ -125,6 +133,10 @@ public static class CrudEndpoints
         if (!TableRegistry.TryResolve(table, out var safeTable, out _))
         {
             return Results.Json(new { error = "Unknown resource" }, statusCode: 404);
+        }
+        if (FeastSwitch.Tables.Contains(safeTable) && !await FeastSwitch.IsOnAsync(db, ct))
+        {
+            return FeastSwitch.Off();
         }
         if (Forbidden(user, safeTable) is { } forbidden)
         {
