@@ -518,6 +518,24 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("decided_at");
+
+                    b.Property<string>("DecidedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("decided_by_name");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("decided_by_user_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("decision_note");
+
                     b.Property<string>("Mode")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
@@ -550,6 +568,14 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Property<Guid?>("RecordedByUserId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("recorded_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("approved")
+                        .HasColumnName("status");
 
                     b.Property<Guid>("YearId")
                         .HasColumnType("uniqueidentifier")
@@ -965,6 +991,24 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("SYSUTCDATETIME()");
 
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("decided_at");
+
+                    b.Property<string>("DecidedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("decided_by_name");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("decided_by_user_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("decision_note");
+
                     b.Property<string>("Details")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(max)")
@@ -979,10 +1023,45 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("org_id");
 
+                    b.Property<string>("PaidFrom")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("fund")
+                        .HasColumnName("paid_from");
+
+                    b.Property<string>("RecordedByName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("recorded_by_name");
+
+                    b.Property<Guid?>("RecordedByUserId")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("recorded_by_user_id");
+
+                    b.Property<string>("RefundMode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("refund_mode");
+
+                    b.Property<string>("RefundedOn")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("refunded_on");
+
                     b.Property<string>("SpentOn")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
                         .HasColumnName("spent_on");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("approved")
+                        .HasColumnName("status");
 
                     b.Property<Guid?>("VendorId")
                         .HasColumnType("uniqueidentifier")
@@ -1702,6 +1781,12 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)")
                         .HasColumnName("entra_tenant_id");
+
+                    b.Property<bool>("FeastEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true)
+                        .HasColumnName("feast_enabled");
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()

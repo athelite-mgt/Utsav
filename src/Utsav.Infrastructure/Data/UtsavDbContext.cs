@@ -608,6 +608,16 @@ public partial class UtsavDbContext : DbContext
             entity.Property(e => e.Id)
                 .HasDefaultValueSql("NEWSEQUENTIALID()")
                 .HasColumnName("id");
+            entity.Property(e => e.Status).HasMaxLength(20).HasDefaultValue("approved").HasColumnName("status");
+            entity.Property(e => e.DecidedByUserId).HasColumnName("decided_by_user_id");
+            entity.Property(e => e.DecidedByName).HasMaxLength(200).HasColumnName("decided_by_name");
+            entity.Property(e => e.DecidedAt).HasColumnName("decided_at");
+            entity.Property(e => e.DecisionNote).HasMaxLength(500).HasColumnName("decision_note");
+            entity.Property(e => e.PaidFrom).HasMaxLength(20).HasDefaultValue("fund").HasColumnName("paid_from");
+            entity.Property(e => e.RecordedByUserId).HasColumnName("recorded_by_user_id");
+            entity.Property(e => e.RecordedByName).HasMaxLength(200).HasColumnName("recorded_by_name");
+            entity.Property(e => e.RefundedOn).HasMaxLength(10).HasColumnName("refunded_on");
+            entity.Property(e => e.RefundMode).HasMaxLength(50).HasColumnName("refund_mode");
             entity.Property(e => e.AdvanceId).HasColumnName("advance_id");
             entity.Property(e => e.Amount)
                 .HasPrecision(12, 2)
@@ -780,6 +790,11 @@ public partial class UtsavDbContext : DbContext
             entity.Property(e => e.ParentType).HasColumnName("parent_type");
             entity.Property(e => e.RecordedByName).HasColumnName("recorded_by_name");
             entity.Property(e => e.RecordedByUserId).HasColumnName("recorded_by_user_id");
+            entity.Property(e => e.Status).HasMaxLength(20).HasDefaultValue("approved").HasColumnName("status");
+            entity.Property(e => e.DecidedByUserId).HasColumnName("decided_by_user_id");
+            entity.Property(e => e.DecidedByName).HasMaxLength(200).HasColumnName("decided_by_name");
+            entity.Property(e => e.DecidedAt).HasColumnName("decided_at");
+            entity.Property(e => e.DecisionNote).HasMaxLength(500).HasColumnName("decision_note");
             entity.Property(e => e.YearId).HasColumnName("year_id");
 
             entity.HasOne(d => d.Org).WithMany()
@@ -972,6 +987,7 @@ public partial class UtsavDbContext : DbContext
                 .HasDefaultValueSql("SYSUTCDATETIME()")
                 .HasColumnName("created_at");
             entity.Property(e => e.EntraTenantId).HasColumnName("entra_tenant_id");
+            entity.Property(e => e.FeastEnabled).HasDefaultValue(true).HasColumnName("feast_enabled");
             entity.Property(e => e.IsActive)
                 .HasDefaultValue(true)
                 .HasColumnName("is_active");

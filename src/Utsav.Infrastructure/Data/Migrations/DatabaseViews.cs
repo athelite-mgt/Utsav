@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace Utsav.Infrastructure.Data.Migrations;
 
 /// <summary>
@@ -155,6 +157,63 @@ internal static class DatabaseViews
           FROM advance_settlements GROUP BY advance_id
         ) s ON s.advance_id = a.id;
         """;
+
+
+    // ---- Approval-aware versions (AddApprovals) --------------------------------
+    // Only money Finance/Admin has confirmed counts. Derived from the originals
+    // so the two cannot drift: every "FROM expenses" becomes a read of the
+    // approved rows. ViewsDerivedFromOriginalsTests asserts each rewrite matched.
+
+    internal const string ApprovedExpenses = "FROM (SELECT * FROM expenses WHERE status = 'approved') expenses";
+
+    public static string ApprovalAwareBudgetVsActual => ApprovalAware(CreateBudgetVsActual);
+
+    public static string ApprovalAwareContractStatus => ApprovalAware(CreateContractStatus);
+
+    private static string ApprovalAware(string original)
+    {
+        var rewritten = original.Replace("CREATE VIEW", "ALTER VIEW").Replace("FROM expenses", ApprovedExpenses);
+        // A silent no-op here would ship a view that counts pending money.
+        return rewritten.Contains(ApprovedExpenses, StringComparison.Ordinal)
+            ? rewritten
+            : throw new InvalidOperationException("Approval rewrite of a reporting view matched nothing.");
+    }
+
+    /// <summary>
+    /// A bill settling an advance only counts once the bill is approved; a cash
+    /// return is Finance-only, so it always counts. Until approval the money
+    /// stays "out" on the advance, so each rupee is counted exactly once.
+    /// </summary>
+    public const string ApprovalAwareAdvanceBalances = """
+        ALTER VIEW v_advance_balances AS
+        SELECT
+          a.id, a.org_id, a.year_id, a.issued_to_name, a.issued_to_collector_id,
+          a.amount, a.issued_on, a.purpose, a.issued_by, a.mode, a.status,
+          a.notes, a.created_at,
+          COALESCE(s.settled, 0) AS settled,
+          COALESCE(s.spent, 0) AS spent,
+          COALESCE(s.returned, 0) AS returned,
+          a.amount - COALESCE(s.settled, 0) AS outstanding
+        FROM advances a
+        LEFT JOIN (
+          SELECT st.advance_id,
+                 SUM(st.amount) AS settled,
+                 SUM(CASE WHEN st.kind = 'expense' THEN st.amount END) AS spent,
+                 SUM(CASE WHEN st.kind = 'return'  THEN st.amount END) AS returned
+          FROM advance_settlements st
+          LEFT JOIN expenses ex ON ex.id = st.expense_id
+          WHERE st.kind = 'return' OR ex.status = 'approved'
+          GROUP BY st.advance_id
+        ) s ON s.advance_id = a.id;
+        """;
+
+    public static readonly string[] AlterToApprovalAware =
+        [ApprovalAwareBudgetVsActual, ApprovalAwareContractStatus, ApprovalAwareAdvanceBalances];
+
+    /// <summary>Restores the pre-approval views (used by the migration's Down).</summary>
+    public static string[] RestoreOriginals() =>
+        new[] { CreateBudgetVsActual, CreateContractStatus, CreateAdvanceBalances }
+            .Select(v => v.Replace("CREATE VIEW", "ALTER VIEW")).ToArray();
 
     public static readonly string[] CreateAll =
         [CreateBudgetVsActual, CreateContractStatus, CreateAdvanceBalances];
