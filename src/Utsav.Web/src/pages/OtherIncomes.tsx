@@ -51,6 +51,7 @@ function SpecialDialog({
     if (existingPayments) {
       setPayments(existingPayments.map((p, i) => ({
         key: `e-${p.id}-${i}`, amount: Number(p.amount) || 0, paid_on: p.paid_on ?? new Date().toISOString().slice(0, 10), mode: p.mode,
+        status: p.status, decision_note: p.decision_note, recorded_by_user_id: p.recorded_by_user_id,
       })));
     }
   }, [existingPayments, open, row]);
@@ -110,6 +111,7 @@ export function OtherIncomesPage() {
   const { activeYearId, previousYearId } = useYear();
   const { can } = useAuth();
   const canWrite = can("write_income");
+  const canRecord = canWrite || can("submit_money");
   const { data = [], isLoading } = useSpecialDonations(activeYearId);
   const { data: priorData = [] } = useSpecialDonations(previousYearId);
   const { remove } = useEntityMutations("special_donations", ["special_donations"], "Other income");
@@ -204,12 +206,12 @@ export function OtherIncomesPage() {
                   <p className="font-semibold tabular text-success">{money(r.collected)}</p>
                   {r.due > 0 && <p className="text-xs text-destructive">Due {money(r.due)}</p>}
                 </div>
-                {canWrite && (
+                {canRecord && (
                   <div className="flex shrink-0 gap-0.5">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditing(r); setOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-                    <ConfirmDialog title="Delete entry?" destructive confirmLabel="Delete"
+                    {canWrite && <ConfirmDialog title="Delete entry?" destructive confirmLabel="Delete"
                       onConfirm={() => remove.mutateAsync(r.id)}
-                      trigger={<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>} />
+                      trigger={<Button variant="ghost" size="icon" className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>} />}
                   </div>
                 )}
               </div>

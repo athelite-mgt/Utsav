@@ -12,14 +12,17 @@ namespace Utsav.Domain.Authorization;
 /// | Chanda, Ads, Special, Offerings        |  CRUD |        CRUD |    CRUD |      read |   read |
 /// | Expenses, Budget, Vendors, Contracts   |  CRUD |        CRUD |    CRUD |      read |   read |
 /// | Workflow / Tasks, Puja Schedule        |  CRUD |        CRUD |    CRUD |      CRUD |   read |
-/// | Cash Advances (+ settlements)          |  CRUD |        CRUD |    CRUD |      CRUD |   read |
+/// | Cash Advances (issue, edit, returns)   |  read |        read |    CRUD |      read |   read |
+/// | Record a collection / expense (pending)|   yes |         yes |     yes |       yes |      – |
+/// | Approve pending money                  |   yes |           – |     yes |         – |      – |
 /// | Dashboard, Fund Position               |  read |        read |    read |      read |   read |
 /// | Audit log                              |  read |        read |       – |         – |      – |
 /// | Asura AI assistant (ask questions)     |   yes |         yes |     yes |         – |      – |
 ///
-/// Reading the brief: everyone up to and including Executive writes Workflow,
-/// Schedule and Cash Advances; Executive is otherwise read-everything; Viewer
-/// is read-only throughout.
+/// Reading the brief: everyone up to and including Executive writes Workflow
+/// and Schedule; only Finance handles Cash Advances (the cashier holds the
+/// box). Money recorded by anyone who cannot approve waits for Finance or
+/// Admin — see <see cref="ApprovalPolicy"/>. Viewer is read-only throughout.
 /// </summary>
 public static class PermissionMatrix
 {
@@ -34,12 +37,13 @@ public static class PermissionMatrix
                 Permission.WriteIncome,
                 Permission.WriteFinance,
                 Permission.WriteWorkflow,
-                Permission.WriteAdvances,
                 Permission.ReadAudit,
                 Permission.UseAsura,
+                Permission.SubmitMoney,
+                Permission.ApproveMoney,
             ]),
 
-            // Everything Admin has, minus committee configuration.
+            // Everything Admin has, minus committee configuration and approving.
             [AppRole.Secretariat] = FrozenSet.ToFrozenSet(
             [
                 Permission.Read,
@@ -47,9 +51,9 @@ public static class PermissionMatrix
                 Permission.WriteIncome,
                 Permission.WriteFinance,
                 Permission.WriteWorkflow,
-                Permission.WriteAdvances,
                 Permission.ReadAudit,
                 Permission.UseAsura,
+                Permission.SubmitMoney,
             ]),
 
             // The money, and the operational surfaces that go with it.
@@ -61,14 +65,17 @@ public static class PermissionMatrix
                 Permission.WriteWorkflow,
                 Permission.WriteAdvances,
                 Permission.UseAsura,
+                Permission.SubmitMoney,
+                Permission.ApproveMoney,
             ]),
 
-            // Reads everything; writes only the operational surfaces.
+            // Reads everything; writes the operational surfaces and may record
+            // money, which then waits for Finance.
             [AppRole.Executive] = FrozenSet.ToFrozenSet(
             [
                 Permission.Read,
                 Permission.WriteWorkflow,
-                Permission.WriteAdvances,
+                Permission.SubmitMoney,
             ]),
 
             [AppRole.Viewer] = FrozenSet.ToFrozenSet(

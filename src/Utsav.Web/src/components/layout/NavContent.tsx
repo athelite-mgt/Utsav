@@ -5,6 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import { AppLogoTile } from "@/components/brand/Athelite";
 import { CommitteeSwitcher } from "@/components/layout/CommitteeSwitcher";
 import { cn } from "@/lib/utils";
+import { useApprovals } from "@/hooks/useFinance";
+import { feastEnabled, isOpen } from "@/lib/approval";
 
 const groupLabels: Record<NavItem["group"], string> = {
   overview: "Overview",
@@ -16,8 +18,13 @@ const groupLabels: Record<NavItem["group"], string> = {
 };
 
 export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
-  const { can, isPlatformAdmin } = useAuth();
-  const items = navItems.filter((n) => !n.permission || can(n.permission));
+  const { can, isPlatformAdmin, org } = useAuth();
+  // Feast is optional: a committee that has switched it off never sees it.
+  const feastOn = feastEnabled(org);
+  const items = navItems.filter((n) => (!n.permission || can(n.permission)) && (n.group !== "feast" || feastOn));
+  // Finance and Admin see how many items are waiting on them.
+  const approver = can("approve_money");
+  const waiting = (useApprovals(approver).data ?? []).filter((i) => isOpen(i.status) && i.status === "pending").length;
   const groups = ["overview", "income", "feast", "spending", "planning", "system"] as const;
 
   return (
@@ -49,6 +56,9 @@ export function NavContent({ onNavigate }: { onNavigate?: () => void }) {
                 >
                   <item.icon className="size-[18px] shrink-0" />
                   <span className="truncate">{item.label}</span>
+                  {item.to === "/approvals" && approver && waiting > 0 && (
+                    <span className="ml-auto rounded-full bg-amber-500 px-1.5 text-[10px] font-semibold text-white">{waiting}</span>
+                  )}
                 </NavLink>
               ))}
             </div>

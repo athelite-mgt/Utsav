@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace Utsav.Infrastructure.Data.Entities;
@@ -30,6 +30,28 @@ public partial class Expense
     public Guid? AdvanceId { get; set; }
 
     public string? BillNo { get; set; }
+
+    /// <summary>approved | pending | sent_back | rejected — only approved money reaches the fund.</summary>
+    public string Status { get; set; } = "approved";
+
+    public Guid? DecidedByUserId { get; set; }
+
+    public string? DecidedByName { get; set; }
+
+    public DateTime? DecidedAt { get; set; }
+
+    public string? DecisionNote { get; set; }
+
+    /// <summary>fund | own_pocket — an own-pocket claim is owed back to the member once approved.</summary>
+    public string PaidFrom { get; set; } = "fund";
+
+    public Guid? RecordedByUserId { get; set; }
+
+    public string? RecordedByName { get; set; }
+
+    public string? RefundedOn { get; set; }
+
+    public string? RefundMode { get; set; }
 
     public DateTime CreatedAt { get; set; }
 

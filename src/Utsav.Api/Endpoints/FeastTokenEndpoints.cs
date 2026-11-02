@@ -36,8 +36,8 @@ public static class FeastTokenEndpoints
 
     public static IEndpointRouteBuilder MapFeastTokenEndpoints(this IEndpointRouteBuilder app)
     {
-        var member = app.MapGroup("/api/feast_tokens").RequireAuthorization(AuthorizationPolicies.ActiveMember);
-        var write = app.MapGroup("/api/feast_tokens").RequirePermission(Permission.WriteIncome);
+        var member = app.MapGroup("/api/feast_tokens").RequireAuthorization(AuthorizationPolicies.ActiveMember).AddEndpointFilter(FeastSwitch.RequireOn);
+        var write = app.MapGroup("/api/feast_tokens").RequirePermission(Permission.WriteIncome).AddEndpointFilter(FeastSwitch.RequireOn);
 
         member.MapGet("", ListAsync);
         member.MapGet("/summary", SummaryAsync);

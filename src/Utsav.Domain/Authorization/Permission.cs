@@ -51,4 +51,10 @@ public enum Permission
     /// excluded despite both being able to read every individual page.
     /// </summary>
     UseAsura,
+
+    /// <summary>Record a collection or an expense. Entries from anyone who cannot also <see cref="ApproveMoney"/> wait for approval.</summary>
+    SubmitMoney,
+
+    /// <summary>Approve, send back, reject or amend pending money, and mark claims refunded. Finance and Admin.</summary>
+    ApproveMoney,
 }

@@ -7,6 +7,9 @@ import {
   useExpenses, useBudget, useOfferings, useMyAdvances, sum,
 } from "@/hooks/useFinance";
 import { money, moneyCompact, pct } from "@/lib/format";
+import { useAuth } from "@/context/AuthContext";
+import { approvedCollected, feastEnabled, isApproved } from "@/lib/approval";
+import { PendingMoneyCard } from "@/components/finance/PendingMoneyCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard } from "@/components/common/StatCard";
 import { CardsSkeleton } from "@/components/common/states";
@@ -30,8 +33,11 @@ export function Dashboard() {
   const budget = useBudget(activeYearId);
   const offerings = useOfferings(activeYearId);
   const myAdvances = useMyAdvances(activeYearId);
-  const feasts = useFeasts(activeYearId);
-  const feastExpenses = useFeastExpenses(activeYearId);
+  const { org } = useAuth();
+  // Feast is optional: when it is switched off its data is not even requested.
+  const feastOn = feastEnabled(org);
+  const feasts = useFeasts(feastOn ? activeYearId : null);
+  const feastExpenses = useFeastExpenses(feastOn ? activeYearId : null);
 
   const loading = subs.isLoading || expenses.isLoading || budget.isLoading;
 
@@ -41,19 +47,25 @@ export function Dashboard() {
   const memberSubs = allSubs.filter((r) => r.category !== "special");
   const specialSubs = allSubs.filter((r) => r.category === "special");
 
-  const memberColl = sum(memberSubs, (r) => r.collected);
-  const specialColl = sum(specialSubs, (r) => r.collected);
-  const adColl = sum(ads.data ?? [], (r) => r.collected);
-  const otherColl = sum(otherIncomes.data ?? [], (r) => r.collected);
+  // Only confirmed money counts as collected; what is still waiting for Finance is shown apart.
+  const memberColl = sum(memberSubs, approvedCollected);
+  const specialColl = sum(specialSubs, approvedCollected);
+  const adColl = sum(ads.data ?? [], approvedCollected);
+  const otherColl = sum(otherIncomes.data ?? [], approvedCollected);
   const totalCollected = memberColl + specialColl + adColl + otherColl;
+  const pendingIncome =
+    sum(allSubs, (r) => r.pending_collected) + sum(ads.data ?? [], (r) => r.pending_collected) +
+    sum(otherIncomes.data ?? [], (r) => r.pending_collected);
 
   const totalBilled =
     sum(subs.data ?? [], (r) => r.billed) +
     sum(ads.data ?? [], (r) => r.billed) +
     sum(otherIncomes.data ?? [], (r) => r.billed);
-  const totalDue = totalBilled - totalCollected;
+  // A donor whose payment is awaiting approval has paid; they are not chased again.
+  const totalDue = totalBilled - totalCollected - pendingIncome;
 
-  const totalSpent = sum(expenses.data ?? [], (r) => r.amount);
+  const approvedExpenses = (expenses.data ?? []).filter(isApproved);
+  const totalSpent = sum(approvedExpenses, (r) => r.amount);
   const balance = totalCollected - totalSpent;
   const target = activeYear?.target ?? 0;
   const progress = pct(totalCollected, target || totalBilled || 1);
@@ -79,7 +91,7 @@ export function Dashboard() {
   ];
 
   const expenseByCat = Object.values(
-    (expenses.data ?? []).reduce<Record<string, { name: string; value: number }>>((acc, e) => {
+    approvedExpenses.reduce<Record<string, { name: string; value: number }>>((acc, e) => {
       const k = e.category ?? "Others";
       acc[k] = acc[k] || { name: k, value: 0 };
       acc[k].value += Number(e.amount) || 0;
@@ -101,7 +113,7 @@ export function Dashboard() {
   const streamTotals = (rows: Array<{ projected: number; billed: number; collected: number }>) => ({
     projected: sum(rows, (r) => r.projected),
     billed: sum(rows, (r) => r.billed),
-    actual: sum(rows, (r) => r.collected),
+    actual: sum(rows, approvedCollected),
   });
 
   const projectedVsBilledVsActual = [
@@ -182,13 +194,14 @@ export function Dashboard() {
       )}
 
       <FundPositionCard yearId={activeYearId} />
+      <PendingMoneyCard yearId={activeYearId} />
 
       {/* Feast is a separate pool of money from the committee's general fund
           — income AND expense, both kept entirely out of the season-wide
           totals and the Fund Position card above, so this is the one place
           that shows the feast's own complete picture: what it billed,
           collected, spent, and netted. */}
-      <div className="space-y-2.5">
+      {feastOn && <div className="space-y-2.5">
         <div className="flex items-center gap-2">
           <UtensilsCrossed className="h-4 w-4 text-muted-foreground" />
           <h3 className="font-display text-base font-semibold">Feast collection</h3>
@@ -203,7 +216,7 @@ export function Dashboard() {
           <StatCard label="Expenses" value={money(feastSpent)} tone="destructive" />
           <StatCard label="Net" value={money(feastNet)} tone={feastNet >= 0 ? "success" : "destructive"} />
         </div>
-      </div>
+      </div>}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

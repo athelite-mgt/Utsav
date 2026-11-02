@@ -19,25 +19,25 @@ public class PermissionMatrixTests
             [
                 Permission.Read, Permission.ManageSettings, Permission.ManageUsers,
                 Permission.WriteIncome, Permission.WriteFinance,
-                Permission.WriteWorkflow, Permission.WriteAdvances, Permission.ReadAudit,
-                Permission.UseAsura,
+                Permission.WriteWorkflow, Permission.ReadAudit,
+                Permission.UseAsura, Permission.SubmitMoney, Permission.ApproveMoney,
             ],
             [AppRole.Secretariat] =
             [
                 Permission.Read, Permission.ManageUsers,
                 Permission.WriteIncome, Permission.WriteFinance,
-                Permission.WriteWorkflow, Permission.WriteAdvances, Permission.ReadAudit,
-                Permission.UseAsura,
+                Permission.WriteWorkflow, Permission.ReadAudit,
+                Permission.UseAsura, Permission.SubmitMoney,
             ],
             [AppRole.Finance] =
             [
                 Permission.Read, Permission.WriteIncome, Permission.WriteFinance,
                 Permission.WriteWorkflow, Permission.WriteAdvances,
-                Permission.UseAsura,
+                Permission.UseAsura, Permission.SubmitMoney, Permission.ApproveMoney,
             ],
             [AppRole.Executive] =
             [
-                Permission.Read, Permission.WriteWorkflow, Permission.WriteAdvances,
+                Permission.Read, Permission.WriteWorkflow, Permission.SubmitMoney,
             ],
             [AppRole.Viewer] =
             [
@@ -85,17 +85,16 @@ public class PermissionMatrixTests
         Assert.Equal([Permission.Read], PermissionMatrix.GrantedTo(AppRole.Viewer).Order().ToArray());
 
     /// <summary>
-    /// The brief's rule: everyone through Executive writes workflow and advances.
+    /// Everyone through Executive writes workflow; advances are the cashier's alone.
     /// </summary>
     [Theory]
     [InlineData(AppRole.Admin)]
     [InlineData(AppRole.Secretariat)]
     [InlineData(AppRole.Finance)]
     [InlineData(AppRole.Executive)]
-    public void Roles_through_executive_write_workflow_and_advances(AppRole role)
+    public void Roles_through_executive_write_workflow(AppRole role)
     {
         Assert.True(PermissionMatrix.Allows(role, Permission.WriteWorkflow));
-        Assert.True(PermissionMatrix.Allows(role, Permission.WriteAdvances));
     }
 
     [Fact]
@@ -106,10 +105,12 @@ public class PermissionMatrixTests
     }
 
     [Fact]
-    public void Executive_cannot_touch_the_money()
+    public void Executive_records_money_but_cannot_write_or_approve_it_directly()
     {
         Assert.False(PermissionMatrix.Allows(AppRole.Executive, Permission.WriteIncome));
         Assert.False(PermissionMatrix.Allows(AppRole.Executive, Permission.WriteFinance));
+        Assert.True(PermissionMatrix.Allows(AppRole.Executive, Permission.SubmitMoney));
+        Assert.False(PermissionMatrix.Allows(AppRole.Executive, Permission.ApproveMoney));
     }
 }
 

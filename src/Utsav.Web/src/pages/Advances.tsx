@@ -120,6 +120,9 @@ function SettleDialog({
   open, onOpenChange, advance,
 }: { open: boolean; onOpenChange: (v: boolean) => void; advance: AdvanceWithBalance | null }) {
   const qc = useQueryClient();
+  const { can } = useAuth();
+  // The cashier alone takes cash back or removes a settlement; any member may file the bill they hold, which then waits for approval.
+  const cashier = can("write_advances");
   const { register, handleSubmit, reset, watch, setValue, setFocus } = useForm<SettleForm>({ defaultValues: emptySettle(0) });
 
   const { data: settlements = [] } = useQuery({
@@ -192,10 +195,10 @@ function SettleDialog({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="tabular font-medium">{money(s.amount)}</span>
-                  <ConfirmDialog title="Remove settlement?" destructive confirmLabel="Remove"
+                  {cashier && <ConfirmDialog title="Remove settlement?" destructive confirmLabel="Remove"
                     description={s.kind === "expense" ? "This also deletes the linked expense entry." : undefined}
                     onConfirm={() => removeSettlement(s.id)}
-                    trigger={<Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>} />
+                    trigger={<Button variant="ghost" size="icon" className="h-6 w-6 text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>} />}
                 </div>
               </div>
             ))}
@@ -208,9 +211,11 @@ function SettleDialog({
               <Button type="button" size="sm" variant={kind === "expense" ? "default" : "outline"} onClick={() => setValue("kind", "expense")} className="flex-1">
                 <Receipt className="h-3.5 w-3.5" /> Bill received
               </Button>
-              <Button type="button" size="sm" variant={kind === "return" ? "default" : "outline"} onClick={() => setValue("kind", "return")} className="flex-1">
-                <Undo2 className="h-3.5 w-3.5" /> Cash returned
-              </Button>
+              {cashier && (
+                <Button type="button" size="sm" variant={kind === "return" ? "default" : "outline"} onClick={() => setValue("kind", "return")} className="flex-1">
+                  <Undo2 className="h-3.5 w-3.5" /> Cash returned
+                </Button>
+              )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Amount" required>
@@ -261,6 +266,7 @@ export function AdvancesPage() {
   const { activeYearId } = useYear();
   const { can } = useAuth();
   const canWrite = can("write_advances");
+  const canSettle = canWrite || can("submit_money");
   const { data = [], isLoading, isError, error } = useAdvances(activeYearId);
   const { data: modes = [] } = useLookups("payment_mode");
   const [search, setSearch] = useState("");
@@ -359,7 +365,7 @@ export function AdvancesPage() {
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                      {canWrite && a.status === "open" && (
+                      {canSettle && a.status === "open" && (
                         <Button size="sm" variant="outline" onClick={() => { setSettling(a); setSettleOpen(true); }}>
                           Settle
                         </Button>

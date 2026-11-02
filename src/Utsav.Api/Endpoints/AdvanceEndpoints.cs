@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -27,10 +28,13 @@ public static class AdvanceEndpoints
 
     public static IEndpointRouteBuilder MapAdvanceEndpoints(this IEndpointRouteBuilder app)
     {
-        // Advances are readable by every role, Viewer included — only issuing,
-        // editing and settling them is gated, to whoever can write Advances.
+        // Advances are readable by every role, Viewer included. Issuing, editing
+        // and cash returns are the cashier's alone (Finance) — the cash box is
+        // theirs. Any member who may record money can file the bill that settles
+        // an advance they hold, but that bill waits for approval like any expense.
         var member = app.MapGroup("/api").RequireAuthorization(AuthorizationPolicies.ActiveMember);
         var write = app.MapGroup("/api").RequirePermission(Permission.WriteAdvances);
+        var submit = app.MapGroup("/api").RequirePermission(Permission.SubmitMoney);
 
         member.MapGet("/advances", (Guid year_id, UtsavDbContext db, CancellationToken ct) =>
             QueryAsync(db, "SELECT * FROM v_advance_balances WHERE year_id=@year AND org_id=@org ORDER BY created_at DESC",
@@ -43,7 +47,7 @@ public static class AdvanceEndpoints
             QueryAsync(db, "SELECT * FROM advance_settlements WHERE advance_id=@id AND org_id=@org ORDER BY created_at",
                 [P("@id", id), Org(db)], ct));
 
-        write.MapPost("/advances/{id:guid}/settle", SettleAsync);
+        submit.MapPost("/advances/{id:guid}/settle", SettleAsync);
         write.MapDelete("/advance_settlements/{id:guid}", DeleteSettlementAsync);
 
         // A personal, read-only summary for the Dashboard — not the full
@@ -100,7 +104,7 @@ public static class AdvanceEndpoints
             : Results.Ok(row);
     }
 
-    private static async Task<IResult> SettleAsync(Guid id, JsonElement body, UtsavDbContext db, CancellationToken ct)
+    private static async Task<IResult> SettleAsync(Guid id, JsonElement body, ClaimsPrincipal user, UtsavDbContext db, CancellationToken ct)
     {
         var advance = (await QueryAsync(db, "SELECT * FROM advances WHERE id=@id AND org_id=@org",
             [P("@id", id), Org(db)], ct)).FirstOrDefault();
@@ -120,9 +124,20 @@ public static class AdvanceEndpoints
         {
             return Results.Json(new { error = "kind must be 'expense' or 'return'" }, statusCode: 400);
         }
+        var caller = Approvals.CallerFrom(user);
+        if (kind == "return" && !(caller.Role is { } role && PermissionMatrix.Allows(role, Permission.WriteAdvances)))
+        {
+            // Cash coming back into the box is confirmed by the cashier who receives it.
+            return Results.Json(new { error = "Only Finance can record cash returned from an advance" }, statusCode: 403);
+        }
         if (kind == "expense" && !TryString(body, "category", out _))
         {
             return Results.Json(new { error = "category is required when settling with a bill" }, statusCode: 400);
+        }
+
+        if (kind == "expense" && !caller.IsApprover)
+        {
+            DynamicSql.SuppressTransactionPush();
         }
 
         var strategy = db.Database.CreateExecutionStrategy();
@@ -135,8 +150,10 @@ public static class AdvanceEndpoints
             {
                 expenseId = Guid.NewGuid();
                 await DynamicSql.ExecuteAsync(db, """
-                    INSERT INTO expenses (id, org_id, year_id, category, details, amount, spent_on, mode, comment, vendor_id, bill_no, advance_id)
-                    VALUES (@id, @org, @year, @category, @details, @amount, @spentOn, @mode, @comment, @vendor, @billNo, @advance)
+                    INSERT INTO expenses (id, org_id, year_id, category, details, amount, spent_on, mode, comment, vendor_id, bill_no, advance_id,
+                                          status, recorded_by_user_id, recorded_by_name)
+                    VALUES (@id, @org, @year, @category, @details, @amount, @spentOn, @mode, @comment, @vendor, @billNo, @advance,
+                            @status, @recordedBy, @recordedByName)
                     """,
                     [
                         P("@id", expenseId.Value), Org(db), P("@year", advance["year_id"]!),
@@ -144,6 +161,9 @@ public static class AdvanceEndpoints
                         P("@amount", amount), P("@spentOn", Opt(body, "spent_on")), P("@mode", Opt(body, "mode")),
                         P("@comment", Opt(body, "comment")), P("@vendor", Opt(body, "vendor_id")),
                         P("@billNo", Opt(body, "bill_no")), P("@advance", id),
+                        P("@status", caller.Status),
+                        P("@recordedBy", (object?)caller.UserId ?? DBNull.Value),
+                        P("@recordedByName", (object?)caller.Name ?? DBNull.Value),
                     ], ct);
             }
 
@@ -168,7 +188,30 @@ public static class AdvanceEndpoints
             await transaction.CommitAsync(ct);
         });
 
+        if (kind == "expense" && !caller.IsApprover)
+        {
+            await Approvals.NotifySubmittedAsync(db, caller, "Bill against an advance", amount, ct);
+        }
+
         return Results.Ok((await BalanceRowAsync(db, id, ct)).FirstOrDefault());
+    }
+
+    /// <summary>
+    /// Closes the advance once its approved settlements cover it, or reopens it
+    /// if they no longer do — run after anything that changes what counts.
+    /// </summary>
+    internal static async Task ReevaluateAsync(UtsavDbContext db, Guid advanceId, CancellationToken ct)
+    {
+        await DynamicSql.ExecuteAsync(db, """
+            UPDATE advances SET status = 'settled'
+             WHERE id = @id AND org_id = @org AND status = 'open'
+               AND (SELECT outstanding FROM v_advance_balances WHERE id = @id AND org_id = @org) <= 0.01
+            """, [P("@id", advanceId), Org(db)], ct);
+        await DynamicSql.ExecuteAsync(db, """
+            UPDATE advances SET status = 'open'
+             WHERE id = @id AND org_id = @org AND status = 'settled'
+               AND (SELECT outstanding FROM v_advance_balances WHERE id = @id AND org_id = @org) > 0.01
+            """, [P("@id", advanceId), Org(db)], ct);
     }
 
     private static async Task<IResult> DeleteSettlementAsync(Guid id, UtsavDbContext db, CancellationToken ct)

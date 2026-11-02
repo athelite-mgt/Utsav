@@ -44,7 +44,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> ForYearAsync(Guid year_id, string? parent_type, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.CollectionPayments.AsNoTracking()
-            .Where(p => p.OrgId == db.TenantId && p.YearId == year_id
+            .Where(p => p.OrgId == db.TenantId && p.YearId == year_id && p.Status != "rejected"
                 && (parent_type == null || p.ParentType == parent_type))
             .Select(p => new { parent_id = p.ParentId, amount = p.Amount, paid_on = p.PaidOn, mode = p.Mode })
             .ToListAsync(ct);
@@ -76,7 +76,7 @@ public static class CollectionEndpoints
                    SUM(cp.amount) AS collected
               FROM collection_payments cp
               LEFT JOIN subscriptions s ON s.id = cp.parent_id AND cp.parent_type = 'subscription'
-             WHERE cp.year_id = @year AND cp.org_id = @org
+             WHERE cp.year_id = @year AND cp.org_id = @org AND cp.status = 'approved'
                {(string.IsNullOrEmpty(from) ? "" : "AND cp.paid_on >= @from")}
                {(string.IsNullOrEmpty(to) ? "" : "AND cp.paid_on <= @to")}
              GROUP BY CASE WHEN cp.parent_type='subscription' THEN COALESCE(s.category,'membership')
@@ -112,7 +112,7 @@ public static class CollectionEndpoints
               JOIN subscriptions s ON s.id = cp.parent_id
               JOIN donors d ON d.id = s.donor_id
               LEFT JOIN zones z ON z.id = d.zone_id
-             WHERE cp.parent_type = 'subscription' AND cp.year_id = @year AND cp.org_id = @org
+             WHERE cp.parent_type = 'subscription' AND cp.year_id = @year AND cp.org_id = @org AND cp.status = 'approved'
                {(string.IsNullOrEmpty(from) ? "" : "AND cp.paid_on >= @from")}
                {(string.IsNullOrEmpty(to) ? "" : "AND cp.paid_on <= @to")}
              GROUP BY COALESCE(z.name, 'No zone')
@@ -149,7 +149,7 @@ public static class CollectionEndpoints
                    SUM(cp.amount) AS collected
               FROM collection_payments cp
               LEFT JOIN subscriptions s ON s.id = cp.parent_id AND cp.parent_type = 'subscription'
-             WHERE cp.year_id = @year AND cp.org_id = @org AND cp.paid_on IS NOT NULL
+             WHERE cp.year_id = @year AND cp.org_id = @org AND cp.status = 'approved' AND cp.paid_on IS NOT NULL
                {(string.IsNullOrEmpty(from) ? "" : "AND cp.paid_on >= @from")}
                {(string.IsNullOrEmpty(to) ? "" : "AND cp.paid_on <= @to")}
              GROUP BY cp.paid_on,
@@ -192,7 +192,7 @@ public static class CollectionEndpoints
                    SUM(cp.amount) AS collected
               FROM collection_payments cp
               LEFT JOIN subscriptions s ON s.id = cp.parent_id AND cp.parent_type = 'subscription'
-             WHERE cp.year_id = @year AND cp.org_id = @org
+             WHERE cp.year_id = @year AND cp.org_id = @org AND cp.status = 'approved'
                {(string.IsNullOrEmpty(from) ? "" : "AND cp.paid_on >= @from")}
                {(string.IsNullOrEmpty(to) ? "" : "AND cp.paid_on <= @to")}
              GROUP BY COALESCE(NULLIF(cp.mode, ''), 'Unspecified'),
@@ -220,7 +220,7 @@ public static class CollectionEndpoints
     private static async Task<IResult> ListAsync(string parent_type, Guid parent_id, UtsavDbContext db, CancellationToken ct)
     {
         var rows = await db.CollectionPayments.AsNoTracking()
-            .Where(p => p.OrgId == db.TenantId && p.ParentType == parent_type && p.ParentId == parent_id)
+            .Where(p => p.OrgId == db.TenantId && p.ParentType == parent_type && p.ParentId == parent_id && p.Status != "rejected")
             .OrderBy(p => p.PaidOn)
             .Select(p => new
             {
@@ -229,6 +229,9 @@ public static class CollectionEndpoints
                 paid_on = p.PaidOn,
                 mode = p.Mode,
                 recorded_by_name = p.RecordedByName,
+                recorded_by_user_id = p.RecordedByUserId,
+                status = p.Status,
+                decision_note = p.DecisionNote,
             })
             .ToListAsync(ct);
 
