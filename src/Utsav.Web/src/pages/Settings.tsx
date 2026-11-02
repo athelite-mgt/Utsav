@@ -5,8 +5,9 @@ import { toast } from "sonner";
 import {
   Settings as Cog, Plus, Trash2, ShieldCheck, X, CalendarDays, Users, MapPin,
   ListChecks, UserCog, Building2, ArrowRightCircle, Check, UserPlus, Ban, Smartphone, Megaphone,
-  KeyRound, Copy, Pencil,
+  KeyRound, Copy, Pencil, Send,
 } from "lucide-react";
+import { InviteLinkCard } from "@/components/auth/InviteLinkCard";
 import { api, qs } from "@/lib/api";
 import { parseHex } from "@/lib/brand";
 import { nextYearName } from "@/lib/yearName";
@@ -668,6 +669,81 @@ function ApiKeySettings() {
   );
 }
 
+interface OutstandingInvite { id: string; email: string; role: AppRole; expires_at: string; created_at: string }
+interface CreatedInvite { invite_code: string; invite_expires_at: string; email: string; role: AppRole }
+
+/** Invite someone by a one-time link or code instead of waiting for them to ask. */
+function InvitationsSettings() {
+  const qc = useQueryClient();
+  const { org, role: myRole } = useAuth();
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<AppRole>("viewer");
+  const [created, setCreated] = useState<CreatedInvite | null>(null);
+  const { data: outstanding = [] } = useQuery({
+    queryKey: ["invites"],
+    queryFn: () => api.get<OutstandingInvite[]>("/invites"),
+  });
+  // Only an Admin may invite another Admin; the server enforces it, this just doesn't offer it.
+  const roles = ROLE_OPTIONS.filter((r) => r.value !== "admin" || myRole === "admin");
+
+  const invite = useMutation({
+    mutationFn: () => api.post<CreatedInvite>("/invites", { email: email.trim(), role }),
+    onSuccess: (r) => { setCreated(r); setEmail(""); qc.invalidateQueries({ queryKey: ["invites"] }); },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.del(`/invites/${id}`),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invites"] }); toast.success("Invitation withdrawn"); },
+    onError: (e: unknown) => toast.error((e as Error).message),
+  });
+
+  return (
+    <div className="space-y-4">
+      <Card className="space-y-3 p-4">
+        <p className="text-sm text-muted-foreground">
+          Send a link that adds someone straight to {org?.name ?? "this committee"} with the role you choose. It works once,
+          for the email address you enter, and expires after 14 days.
+        </p>
+        <form
+          className="flex flex-col gap-2 sm:flex-row"
+          onSubmit={(e) => { e.preventDefault(); if (email.trim()) invite.mutate(); }}
+        >
+          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@example.org" aria-label="Email to invite" />
+          <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
+            <SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {roles.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button type="submit" disabled={invite.isPending || !email.trim()}><Send /> Create invitation</Button>
+        </form>
+        {created && (
+          <InviteLinkCard code={created.invite_code} email={created.email} committee={org?.name ?? "the committee"} expiresAt={created.invite_expires_at} />
+        )}
+      </Card>
+
+      {outstanding.length > 0 && (
+        <Card className="divide-y divide-border">
+          <p className="px-4 py-2.5 text-sm font-semibold">Waiting to be used</p>
+          {outstanding.map((i) => (
+            <div key={i.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{i.email}</p>
+                <p className="text-xs text-muted-foreground">
+                  {ROLE_OPTIONS.find((r) => r.value === i.role)?.label ?? i.role} · expires {new Date(i.expires_at).toLocaleDateString()}
+                </p>
+              </div>
+              <Button size="sm" variant="ghost" className="text-destructive" disabled={revoke.isPending} onClick={() => revoke.mutate(i.id)}>
+                <Ban className="h-3.5 w-3.5" /> Withdraw
+              </Button>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function AccessRequestsSettings() {
   const qc = useQueryClient();
   const { data = [] } = useQuery({
@@ -747,6 +823,7 @@ export function SettingsPage() {
   const tabs = [
     manageSettings && { v: "year", label: "Puja Year", icon: CalendarDays, node: <YearSettings /> },
     manageUsers && { v: "requests", label: "Access Requests", icon: UserPlus, node: <AccessRequestsSettings /> },
+    manageUsers && { v: "invites", label: "Invitations", icon: Send, node: <InvitationsSettings /> },
     manageUsers && { v: "users", label: "Users & Roles", icon: UserCog, node: <UserSettings /> },
     manageSettings && { v: "collectors", label: "Collectors", icon: Users, node: <CollectorSettings /> },
     manageSettings && { v: "zones", label: "Zones", icon: MapPin, node: <ZoneSettings /> },

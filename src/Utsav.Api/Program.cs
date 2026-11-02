@@ -355,6 +355,7 @@ app.MapModuleEndpoints();
 app.MapFundPositionEndpoint();
 app.MapAdvanceEndpoints();
 app.MapApprovalEndpoints();
+app.MapInviteEndpoints();
 app.MapContractEndpoints();
 app.MapVendorIssueEndpoints();
 app.MapAdminEndpoints();

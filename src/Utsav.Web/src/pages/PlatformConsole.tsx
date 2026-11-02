@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, Copy, KeyRound, LogOut, Plus } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, KeyRound, LogOut, Plus, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { BrandMark } from "@/components/layout/NavContent";
 import type { CreatedCommittee, PlatformCommittee } from "@/types/db";
 import { inviteLink, inviteMailto } from "@/lib/invite";
+import { InviteLinkCard } from "@/components/auth/InviteLinkCard";
 
 interface Festival { id: string; name: string }
 
@@ -24,6 +25,85 @@ const selectClass =
  * people are in each, never any committee's figures. The capability this page
  * rests on grants no access to anyone's books.
  */
+/**
+ * What the operator can do for one committee. A committee with nobody in it has no one to
+ * approve requests or send invitations, so the operator seats its FIRST administrator here.
+ * Once it has members its own admins run access (Settings → Invitations / Access Requests),
+ * and the operator sees none of it — the platform role never opens a committee's books.
+ */
+function CommitteeDetail({ committee: c }: { committee: PlatformCommittee }) {
+  const queryClient = useQueryClient();
+  const empty = c.members === 0;
+  const requests = useQuery({
+    queryKey: ["platform", "requests", c.id],
+    enabled: empty,
+    queryFn: () => api.get<{ member_id: string; email: string; full_name: string | null }[]>(`/platform/committees/${c.id}/requests`),
+  });
+  const [email, setEmail] = useState("");
+  const [invite, setInvite] = useState<{ invite_code: string; invite_expires_at: string; email: string } | null>(null);
+
+  const approve = useMutation({
+    mutationFn: (memberId: string) => api.post(`/platform/committees/${c.id}/requests/${memberId}/approve`, {}),
+    onSuccess: () => {
+      toast.success("Approved as the committee's administrator");
+      void queryClient.invalidateQueries({ queryKey: ["platform"] });
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const send = useMutation({
+    mutationFn: () => api.post<{ invite_code: string; invite_expires_at: string }>(
+      `/platform/committees/${c.id}/reissue-invite`, { email: email.trim() }),
+    onSuccess: (r) => { setInvite({ ...r, email: email.trim() }); setEmail(""); void queryClient.invalidateQueries({ queryKey: ["platform", "committees"] }); },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  if (!empty) {
+    return (
+      <div className="border-t border-border bg-muted/30 px-5 py-4 text-sm text-muted-foreground">
+        {c.name} has {c.members} {c.members === 1 ? "member" : "members"}, so its own admins approve requests and send
+        invitations (Settings → Access Requests / Invitations). The platform console never opens a running committee.
+      </div>
+    );
+  }
+
+  const waiting = requests.data ?? [];
+  return (
+    <div className="space-y-5 border-t border-border bg-muted/30 px-5 py-4">
+      <section className="space-y-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><UserCheck className="h-4 w-4" /> Requests to join</h3>
+        {waiting.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            None waiting. Someone can ask by signing in and entering the short name <code className="font-mono">{c.slug}</code>.
+          </p>
+        ) : (
+          <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+            {waiting.map((r) => (
+              <li key={r.member_id} className="flex items-center justify-between gap-3 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{r.full_name ?? r.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">{r.email}</p>
+                </div>
+                <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(r.member_id)}>
+                  <Check /> Approve as administrator
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="space-y-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="h-4 w-4" /> Invite the first administrator</h3>
+        <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (email.trim()) send.mutate(); }}>
+          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="secretary@example.org" aria-label="Email to invite" />
+          <Button type="submit" disabled={send.isPending || !email.trim()}>Create invitation link</Button>
+        </form>
+        {invite && <InviteLinkCard code={invite.invite_code} email={invite.email} committee={c.name} expiresAt={invite.invite_expires_at} />}
+      </section>
+    </div>
+  );
+}
+
 export function PlatformConsole() {
   const { user, org, signOut } = useAuth();
   const queryClient = useQueryClient();
@@ -49,6 +129,7 @@ export function PlatformConsole() {
     if (!festival && festivals.data?.length) setFestival(festivals.data[0].id);
   }, [festival, festivals.data]);
   const [created, setCreated] = useState<{ committee: CreatedCommittee; email: string } | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const create = useMutation({
@@ -82,39 +163,6 @@ export function PlatformConsole() {
     } catch {
       toast.error("Couldn't copy — select the code and copy it by hand.");
     }
-  }
-
-  const approveRequests = useMutation({
-    mutationFn: async (c: PlatformCommittee) => {
-      const requests = await api.get<{ member_id: string; email: string }[]>(`/platform/committees/${c.id}/requests`);
-      let approved = 0;
-      for (const r of requests) {
-        if (!window.confirm(`Approve ${r.email} as the first administrator of ${c.name}?`)) continue;
-        await api.post(`/platform/committees/${c.id}/requests/${r.member_id}/approve`, {});
-        approved += 1;
-      }
-      return approved;
-    },
-    onSuccess: (n) => { void queryClient.invalidateQueries({ queryKey: ["platform", "committees"] }); toast.success(n ? `Approved ${n}` : "Nothing approved"); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  const reissue = useMutation({
-    mutationFn: ({ id, to }: { id: string; to: string }) =>
-      api.post<{ invite_code: string; invite_expires_at: string }>(`/platform/committees/${id}/reissue-invite`, { email: to }),
-    onSuccess: (result, { id, to }) => {
-      const committee = committees.data?.find((c) => c.id === id);
-      setCreated({ committee: { id, slug: committee?.slug ?? "", ...result }, email: to });
-      setCopied(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      void queryClient.invalidateQueries({ queryKey: ["platform", "committees"] });
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-
-  function askAndReissue(committee: PlatformCommittee) {
-    const to = window.prompt(`Email address for ${committee.name}'s first administrator:`);
-    if (to?.trim()) reissue.mutate({ id: committee.id, to: to.trim() });
   }
 
   const expires = created ? new Date(created.committee.invite_expires_at).toLocaleDateString() : "";
@@ -229,27 +277,31 @@ export function PlatformConsole() {
           ) : (
             <ul className="divide-y divide-border">
               {(committees.data ?? []).map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{c.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {c.slug}{c.city ? ` · ${c.city}` : ""} · created {new Date(c.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {c.pending_invite && <span className="rounded-full bg-gold/10 px-2 py-0.5 text-gold">Invite waiting</span>}
-                    <span>{c.members} {c.members === 1 ? "member" : "members"}</span>
-                    {c.members === 0 && (c.pending_requests ?? 0) > 0 && (
-                      <Button size="sm" disabled={approveRequests.isPending} onClick={() => approveRequests.mutate(c)}>
-                        Approve {c.pending_requests} request{c.pending_requests === 1 ? "" : "s"}
-                      </Button>
-                    )}
-                    {c.members === 0 && (
-                      <Button variant="outline" size="sm" disabled={reissue.isPending} onClick={() => askAndReissue(c)}>
-                        <KeyRound /> Re-issue invite
-                      </Button>
-                    )}
-                  </div>
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    className="flex w-full flex-wrap items-center justify-between gap-2 px-5 py-3 text-left hover:bg-muted/40"
+                    aria-expanded={openId === c.id}
+                    onClick={() => setOpenId(openId === c.id ? null : c.id)}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.slug}{c.city ? ` · ${c.city}` : ""} · created {new Date(c.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {c.members === 0 && (c.pending_requests ?? 0) > 0 && (
+                        <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-400">
+                          {c.pending_requests} waiting
+                        </span>
+                      )}
+                      {c.pending_invite && <span className="rounded-full bg-gold/10 px-2 py-0.5 text-gold">Invite waiting</span>}
+                      <span>{c.members} {c.members === 1 ? "member" : "members"}</span>
+                      <ChevronDown className={openId === c.id ? "h-4 w-4 rotate-180 transition-transform" : "h-4 w-4 transition-transform"} />
+                    </div>
+                  </button>
+                  {openId === c.id && <CommitteeDetail committee={c} />}
                 </li>
               ))}
               {committees.data?.length === 0 && <li className="px-5 py-4 text-sm text-muted-foreground">None yet.</li>}
