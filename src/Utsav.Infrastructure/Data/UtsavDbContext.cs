@@ -117,6 +117,10 @@ public partial class UtsavDbContext : DbContext
                 .HasPrecision(12, 2)
                 .HasDefaultValue(0m)
                 .HasColumnName("collected");
+            entity.Property(e => e.PendingCollected)
+                .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
+                .HasColumnName("pending_collected");
             entity.Property(e => e.CollectedOn).HasColumnName("collected_on");
             entity.Property(e => e.Comments).HasColumnName("comments");
             entity.Property(e => e.CreatedAt)
@@ -1221,6 +1225,10 @@ public partial class UtsavDbContext : DbContext
                 .HasPrecision(12, 2)
                 .HasDefaultValue(0m)
                 .HasColumnName("collected");
+            entity.Property(e => e.PendingCollected)
+                .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
+                .HasColumnName("pending_collected");
             entity.Property(e => e.CollectedOn).HasColumnName("collected_on");
             entity.Property(e => e.Comments).HasColumnName("comments");
             entity.Property(e => e.Contact).HasColumnName("contact");
@@ -1401,6 +1409,10 @@ public partial class UtsavDbContext : DbContext
                 .HasPrecision(12, 2)
                 .HasDefaultValue(0m)
                 .HasColumnName("collected");
+            entity.Property(e => e.PendingCollected)
+                .HasPrecision(12, 2)
+                .HasDefaultValue(0m)
+                .HasColumnName("pending_collected");
             entity.Property(e => e.CollectedOn).HasColumnName("collected_on");
             entity.Property(e => e.CollectorId).HasColumnName("collector_id");
             entity.Property(e => e.Comments).HasColumnName("comments");

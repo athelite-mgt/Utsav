@@ -124,7 +124,31 @@ public static class ApprovalEndpoints
             if (result is null) await transaction.CommitAsync(ct); else await transaction.RollbackAsync(ct);
         });
 
+        if (result is null && decision != Decision.Approve)
+        {
+            await NotifyRecorderAsync(db, kind, id, decision, note, caller, ct);
+        }
+
         return result ?? Results.Ok(new { ok = true });
+    }
+
+    /// <summary>Tells the member whose entry was sent back or rejected, and why.</summary>
+    private static async Task NotifyRecorderAsync(
+        UtsavDbContext db, string kind, Guid id, Decision decision, string? note, Approvals.CallerInfo caller, CancellationToken ct)
+    {
+        var table = kind == "income" ? "collection_payments" : "expenses";
+        var rows = await ModuleEndpoints.QueryAsync(db,
+            $"SELECT recorded_by_user_id, amount FROM {table} WHERE id = @id AND org_id = @org", [P("@id", id), P("@org", db.TenantId)], ct);
+        if (rows.FirstOrDefault() is not { } row || row["recorded_by_user_id"] is not Guid recorder)
+        {
+            return;
+        }
+
+        var amount = row["amount"] is decimal a ? $" — ₹{a:N0}" : "";
+        var title = decision == Decision.SendBack ? "Sent back for a fix" : "Not approved";
+        await DynamicSql.NotifyAsync(new Infrastructure.Push.PushNotificationRequest(
+            db.TenantId, caller.UserId, title, $"{(kind == "income" ? "Payment" : "Expense")}{amount}: {note}", "/approvals",
+            ActorName: caller.Name, Kind: "approval", OnlyToUserId: recorder), ct);
     }
 
     private static string Verb(Decision d) => d switch
@@ -197,15 +221,18 @@ public static class ApprovalEndpoints
                 P("@id", id), P("@org", db.TenantId),
             ], ct);
 
+        var parentTable = parentType switch { "subscription" => "subscriptions", "ad_booking" => "ad_bookings", _ => "special_donations" };
         if (decision == Decision.Reject)
         {
             // The donor's bill goes back to unpaid by exactly this amount.
-            var table = parentType switch { "subscription" => "subscriptions", "ad_booking" => "ad_bookings", _ => "special_donations" };
-            await Approvals.RecomputeCollectedAsync(db, table, parentId, ct);
+            await Approvals.RecomputeCollectedAsync(db, parentTable, parentId, ct);
+        }
+        else
+        {
+            await Approvals.RecomputePendingAsync(db, parentTable, parentId, ct);
         }
 
-        var label = await CrudEndpoints.ResolveSettlementLabelAsync(db,
-            parentType switch { "subscription" => "subscriptions", "ad_booking" => "ad_bookings", _ => "special_donations" }, parentId, ct);
+        var label = await CrudEndpoints.ResolveSettlementLabelAsync(db, parentTable, parentId, ct);
         await DynamicSql.AuditCollectionPaymentAsync("UPDATE", label, new Dictionary<string, object?>
         {
             ["decision"] = Verb(decision), ["amount"] = approved, ["recorded"] = recorded, ["note"] = note,

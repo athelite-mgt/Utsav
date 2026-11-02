@@ -79,6 +79,11 @@ public class ApprovalFlowTests(DatabaseFixture fixture)
         Assert.Equal("approved", row.Status);
         Assert.Equal(financeId, row.DecidedByUserId);
         Assert.NotNull(row.DecidedAt);
+
+        // The bill still shows the payment, and none of it is pending any more.
+        var parent = await db.Subscriptions.SingleAsync(s => s.Id == bill);
+        Assert.Equal(500m, parent.Collected);
+        Assert.Equal(0m, parent.PendingCollected);
     }
 
     [Fact]
@@ -97,7 +102,9 @@ public class ApprovalFlowTests(DatabaseFixture fixture)
         Assert.Contains((400m, "approved"), rows);
         Assert.Contains((100m, "pending"), rows);
         await using var db = fixture.ContextFor(fixture.TenantC);
-        Assert.Equal(500m, (await db.Subscriptions.SingleAsync(s => s.Id == bill)).Collected);
+        var parent = await db.Subscriptions.SingleAsync(s => s.Id == bill);
+        Assert.Equal(500m, parent.Collected);
+        Assert.Equal(100m, parent.PendingCollected);
     }
 
     [Theory]
@@ -149,6 +156,7 @@ public class ApprovalFlowTests(DatabaseFixture fixture)
         await using var db = fixture.ContextFor(fixture.TenantC);
         var row = await db.Subscriptions.SingleAsync(s => s.Id == bill);
         Assert.Equal(0m, row.Collected);
+        Assert.Equal(0m, row.PendingCollected);
         Assert.Equal(1000m, row.Due);
     }
 
@@ -317,5 +325,52 @@ public class ApprovalFlowTests(DatabaseFixture fixture)
         Assert.Equal(HttpStatusCode.OK, fixedUp.StatusCode);
         await using var db = fixture.ContextFor(fixture.TenantC);
         Assert.Equal("pending", (await db.Expenses.SingleAsync(e => e.Id == claim)).Status);
+    }
+
+    private async Task<List<(string Title, string Body)>> NotificationsAboutAsync(string needle, int expected)
+    {
+        for (var i = 0; i < 40; i++)
+        {
+            await using var db = fixture.ContextFor(fixture.TenantC);
+            var rows = (await db.Notifications.Where(n => n.Body != null && n.Body.Contains(needle)).ToListAsync())
+                .Select(n => (n.Title, n.Body)).ToList();
+            if (rows.Count >= expected) return rows;
+            await Task.Delay(100);
+        }
+
+        await using var last = fixture.ContextFor(fixture.TenantC);
+        return (await last.Notifications.Where(n => n.Body != null && n.Body.Contains(needle)).ToListAsync())
+            .Select(n => (n.Title, n.Body)).ToList();
+    }
+
+    private static HttpClient ClientOn(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> host, string token)
+    {
+        var client = host.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { HandleCookies = false });
+        client.DefaultRequestHeaders.Add("Cookie", $"{Utsav.Api.Authentication.SessionCookie.Name}={token}");
+        client.DefaultRequestHeaders.Add(Utsav.Api.Authentication.SessionCookie.CsrfHeader, Utsav.Infrastructure.Authentication.SessionTokens.CsrfFor(token));
+        return client;
+    }
+
+    [Fact]
+    public async Task A_submission_notifies_the_approvers_once_and_a_decision_notifies_the_member()
+    {
+        // The push queue is wired through a process-wide static, so this test runs its own host to be
+        // sure the notifications land in the queue it is watching, whatever other hosts have started.
+        await using var host = fixture.NewHost();
+        var (_, execToken) = await fixture.NewMemberAsync("Notif Exec Zed", [(fixture.TenantC, "executive", "active")], fixture.TenantC);
+        var (_, finToken) = await fixture.NewMemberAsync("notif-fin", [(fixture.TenantC, "finance", "active")], fixture.TenantC);
+        using var executive = ClientOn(host, execToken);
+        using var finance = ClientOn(host, finToken);
+
+        var claim = await PendingExpenseAsync(executive, 7351);
+
+        var submitted = await NotificationsAboutAsync("Notif Exec Zed", 1);
+        Assert.Single(submitted);                               // ours only, not also "Expenses added"
+        Assert.Equal("Waiting for your approval", submitted[0].Title);
+
+        await finance.PostAsJsonAsync($"/api/approvals/expense/{claim}/send_back", new { note = "Missing bill" });
+
+        var all = await NotificationsAboutAsync("Missing bill", 1);
+        Assert.Contains(all, n => n.Title == "Sent back for a fix");
     }
 }

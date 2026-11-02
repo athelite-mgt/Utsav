@@ -71,6 +71,10 @@ public static class CrudEndpoints
         }
 
         var caller = Caller(user);
+        if (Approvals.IsGated(safeTable) && !caller.IsApprover)
+        {
+            DynamicSql.SuppressTransactionPush();
+        }
         if (safeTable == "expenses")
         {
             supplied.AddRange(Approvals.ExpenseCreateColumns(caller));
@@ -106,6 +110,11 @@ public static class CrudEndpoints
 
         await DynamicSql.ExecuteAsync(db, sql, parameters, ct);
         await PersistCollectionPaymentsAsync(db, caller, safeTable, id, body, ct);
+        if (safeTable == "expenses" && !caller.IsApprover)
+        {
+            await Approvals.NotifySubmittedAsync(db, caller, "Expense",
+                supplied.FirstOrDefault(c => c.Column == "amount").Value as decimal?, ct);
+        }
         return await ReadRowAsync(db, safeTable, id, ct) is { } row
             ? Results.Ok(row)
             : Results.Json(new { error = "Not found in this organization" }, statusCode: 404);
@@ -138,6 +147,10 @@ public static class CrudEndpoints
             // for, and the collected total (derived from instalments), are not theirs.
             supplied.RemoveAll(c => c.Column == "collected"
                 || (access == WriteAccess.SubmitOnly && !Approvals.SubmitterIncomeColumns.Contains(c.Column)));
+        }
+        if (Approvals.IsGated(safeTable) && !caller.IsApprover)
+        {
+            DynamicSql.SuppressTransactionPush();
         }
         if (safeTable == "expenses" && !caller.IsApprover)
         {
@@ -351,9 +364,21 @@ public static class CrudEndpoints
 
         await db.SaveChangesAsync(ct);
 
-        if (!approver)
+        if (gated)
         {
-            await Approvals.RecomputeCollectedAsync(db, table, parentId, ct);
+            if (approver)
+            {
+                // The dialog already sent the collected total; only the pending part may have changed.
+                await Approvals.RecomputePendingAsync(db, table, parentId, ct);
+            }
+            else
+            {
+                await Approvals.RecomputeCollectedAsync(db, table, parentId, ct);
+                if (added.Count > 0)
+                {
+                    await Approvals.NotifySubmittedAsync(db, caller, "Payment", added.Sum(a => a.Amount), ct);
+                }
+            }
         }
 
         // History never sees these writes otherwise — they go through EF Core

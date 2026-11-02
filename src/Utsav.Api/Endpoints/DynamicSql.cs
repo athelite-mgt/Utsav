@@ -416,6 +416,32 @@ internal static class DynamicSql
     /// </summary>
     private const string NotifiedKey = "puja:push-notified";
 
+    /// <summary>
+    /// A submission waiting for approval sends its own, better-aimed push, so the
+    /// generic "transaction updated" one for the same request is switched off.
+    /// </summary>
+    internal static void SuppressTransactionPush()
+    {
+        if (_httpContextAccessor?.HttpContext is { } http)
+        {
+            http.Items[NotifiedKey] = true;
+        }
+    }
+
+    /// <summary>Queues a targeted push (best-effort, like every notification here).</summary>
+    internal static async Task NotifyAsync(PushNotificationRequest request, CancellationToken ct)
+    {
+        if (_pushDispatcher is null) return;
+        try
+        {
+            await _pushDispatcher.EnqueueAsync(request, ct);
+        }
+        catch
+        {
+            // Never why a real mutation fails.
+        }
+    }
+
     private static async Task TryNotifyAsync(
         Guid orgId, string? table, string? verb, string? entityLabel,
         List<Dictionary<string, object?>>? before, IReadOnlyCollection<object> parameters, CancellationToken ct)

@@ -115,7 +115,7 @@ public static class AuditReportEndpoint
                    cp.mode AS mode, cp.amount AS amount
               FROM collection_payments cp
               LEFT JOIN subscriptions s ON s.id = cp.parent_id AND cp.parent_type='subscription'
-             WHERE cp.year_id=@year AND cp.org_id=@org
+             WHERE cp.year_id=@year AND cp.org_id=@org AND cp.status = 'approved'
             """, P(), ct);
 
         // Billed (earned) and dues (still receivable) per stream, for I&E and the
@@ -140,7 +140,7 @@ public static class AuditReportEndpoint
         // Expenses paid, per category, carrying mode for the cash/bank split.
         var expenseRows = await ModuleEndpoints.QueryAsync(db, """
             SELECT COALESCE(NULLIF(category,''),'Uncategorised') AS category, mode AS mode, amount AS amount
-              FROM expenses WHERE year_id=@year AND org_id=@org
+              FROM expenses WHERE year_id=@year AND org_id=@org AND status = 'approved'
             """, P(), ct);
 
         // Advances still out with volunteers, and internal cash<->bank transfers,
@@ -387,7 +387,7 @@ public static class AuditReportEndpoint
             SELECT COALESCE(NULLIF(e.category,''),'Uncategorised') AS category, e.details, e.bill_no,
                    e.amount, e.spent_on, e.mode
               FROM expenses e
-             WHERE e.year_id = @year AND e.org_id = @org
+             WHERE e.year_id = @year AND e.org_id = @org AND e.status = 'approved'
              ORDER BY e.spent_on, e.category
             """, [new SqlParameter("@year", yearId), new SqlParameter("@org", org)], ct);
 

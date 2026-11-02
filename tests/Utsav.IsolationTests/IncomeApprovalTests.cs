@@ -67,6 +67,8 @@ public class IncomeApprovalTests(DatabaseFixture fixture)
         Assert.True(response.StatusCode == HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
         Assert.Equal([(500m, "pending")], await InstalmentsAsync(bill));
         Assert.Equal(500m, await CollectedAsync(bill));
+        await using var db = fixture.ContextFor(fixture.TenantC);
+        Assert.Equal(500m, (await db.Subscriptions.SingleAsync(s => s.Id == bill)).PendingCollected);
     }
 
     [Fact]

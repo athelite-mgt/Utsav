@@ -32,6 +32,13 @@ internal static class Approvals
 
     public static bool IsGated(string table) => IsIncomeTable(table) || table == "expenses";
 
+    /// <summary>Tells the approvers something is waiting for them.</summary>
+    public static Task NotifySubmittedAsync(UtsavDbContext db, CallerInfo caller, string what, decimal? amount, CancellationToken ct) =>
+        DynamicSql.NotifyAsync(new Infrastructure.Push.PushNotificationRequest(
+            db.TenantId, caller.UserId, "Waiting for your approval",
+            amount is { } a ? $"{caller.Name ?? "A member"} · {what} — ₹{a:N0}" : $"{caller.Name ?? "A member"} · {what}",
+            "/approvals", ActorName: caller.Name, Kind: "approval", Roles: ["admin", "finance"]), ct);
+
     /// <summary>The only bill fields a role that may merely record payments can change.</summary>
     public static readonly IReadOnlySet<string> SubmitterIncomeColumns =
         new HashSet<string>(StringComparer.Ordinal) { "mode", "collected_on", "comments", "updated_at" };
@@ -83,23 +90,32 @@ internal static class Approvals
         return Convert.ToInt32(rows.First()["n"], System.Globalization.CultureInfo.InvariantCulture) > 0;
     }
 
+    private static string ParentTypeOf(string table) => table switch
+    {
+        "subscriptions" => "subscription",
+        "ad_bookings" => "ad_booking",
+        _ => "special_donation",
+    };
+
+    private const string PendingSum =
+        "(SELECT ISNULL(SUM(amount), 0) FROM collection_payments WHERE parent_type = @t AND parent_id = @id AND org_id = @org AND status IN ('pending', 'sent_back'))";
+
     /// <summary>
     /// The bill's collected total is the sum of its instalments that have not
     /// been rejected — pending ones count on the bill (so the donor isn't chased
-    /// twice) while the fund counts only the approved ones.
+    /// twice) — and <c>pending_collected</c> is the part of it not yet approved.
+    /// Reports and the dashboard use <c>collected − pending_collected</c>.
     /// </summary>
-    public static async Task RecomputeCollectedAsync(UtsavDbContext db, string table, Guid parentId, CancellationToken ct)
-    {
-        var parentType = table switch
-        {
-            "subscriptions" => "subscription",
-            "ad_bookings" => "ad_booking",
-            _ => "special_donation",
-        };
-        // Table name comes from the whitelist above, never from the request.
-        await DynamicSql.ExecuteAsync(db,
-            $"UPDATE [{table}] SET collected = (SELECT ISNULL(SUM(amount), 0) FROM collection_payments "
-            + "WHERE parent_type = @t AND parent_id = @id AND org_id = @org AND status <> 'rejected') WHERE id = @id AND org_id = @org;",
-            [new SqlParameter("@t", parentType), new SqlParameter("@id", parentId), new SqlParameter("@org", db.TenantId)], ct);
-    }
+    public static Task RecomputeCollectedAsync(UtsavDbContext db, string table, Guid parentId, CancellationToken ct) =>
+        RecomputeAsync(db, table, parentId, "collected = (SELECT ISNULL(SUM(amount), 0) FROM collection_payments "
+            + "WHERE parent_type = @t AND parent_id = @id AND org_id = @org AND status <> 'rejected'), pending_collected = " + PendingSum, ct);
+
+    /// <summary>Refreshes only the not-yet-approved part, for changes that never alter what the donor paid.</summary>
+    public static Task RecomputePendingAsync(UtsavDbContext db, string table, Guid parentId, CancellationToken ct) =>
+        RecomputeAsync(db, table, parentId, "pending_collected = " + PendingSum, ct);
+
+    private static Task RecomputeAsync(UtsavDbContext db, string table, Guid parentId, string assignments, CancellationToken ct) =>
+        // The table name comes from the whitelist the callers resolved, never from the request.
+        DynamicSql.ExecuteAsync(db, $"UPDATE [{table}] SET {assignments} WHERE id = @id AND org_id = @org;",
+            [new SqlParameter("@t", ParentTypeOf(table)), new SqlParameter("@id", parentId), new SqlParameter("@org", db.TenantId)], ct);
 }

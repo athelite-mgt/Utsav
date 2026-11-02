@@ -135,6 +135,11 @@ public static class AdvanceEndpoints
             return Results.Json(new { error = "category is required when settling with a bill" }, statusCode: 400);
         }
 
+        if (kind == "expense" && !caller.IsApprover)
+        {
+            DynamicSql.SuppressTransactionPush();
+        }
+
         var strategy = db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
@@ -182,6 +187,11 @@ public static class AdvanceEndpoints
 
             await transaction.CommitAsync(ct);
         });
+
+        if (kind == "expense" && !caller.IsApprover)
+        {
+            await Approvals.NotifySubmittedAsync(db, caller, "Bill against an advance", amount, ct);
+        }
 
         return Results.Ok((await BalanceRowAsync(db, id, ct)).FirstOrDefault());
     }

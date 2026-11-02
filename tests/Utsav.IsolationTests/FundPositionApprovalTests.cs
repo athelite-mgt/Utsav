@@ -12,8 +12,29 @@ namespace Utsav.IsolationTests;
 /// Each test builds its own clean year in committee C.
 /// </summary>
 [Collection(nameof(DatabaseFixture))]
-public class FundPositionApprovalTests(DatabaseFixture fixture)
+public class FundPositionApprovalTests(DatabaseFixture fixture) : IAsyncLifetime
 {
+    private readonly List<Guid> _years = [];
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    /// <summary>Removes the years this class made, so committee C's other tests see only their own.</summary>
+    public async Task DisposeAsync()
+    {
+        await using var db = fixture.ContextFor(fixture.TenantC);
+        foreach (var year in _years)
+        {
+            var advances = await db.Advances.Where(a => a.YearId == year).Select(a => a.Id).ToListAsync();
+            db.AdvanceSettlements.RemoveRange(db.AdvanceSettlements.Where(x => advances.Contains(x.AdvanceId)));
+            db.Expenses.RemoveRange(db.Expenses.Where(x => x.YearId == year));
+            db.Advances.RemoveRange(db.Advances.Where(x => x.YearId == year));
+            db.CollectionPayments.RemoveRange(db.CollectionPayments.Where(x => x.YearId == year));
+            await db.SaveChangesAsync();
+            db.PujaYears.RemoveRange(db.PujaYears.Where(x => x.Id == year));
+            await db.SaveChangesAsync();
+        }
+    }
+
     private static int _nextYear = 2200;
 
     private async Task<Guid> NewYearAsync()
@@ -22,6 +43,7 @@ public class FundPositionApprovalTests(DatabaseFixture fixture)
         await using var db = fixture.ContextFor(fixture.TenantC);
         db.PujaYears.Add(new PujaYear { Id = id, OrgId = fixture.TenantC, Year = Interlocked.Increment(ref _nextYear), Name = "Fund test", IsActive = false });
         await db.SaveChangesAsync();
+        _years.Add(id);
         return id;
     }
 

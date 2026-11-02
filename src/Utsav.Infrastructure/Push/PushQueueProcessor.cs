@@ -95,8 +95,12 @@ public sealed class PushQueueProcessor(
             join om in db.OrgMembers on ps.UserId equals om.UserId
             where om.OrgId == request.OrgId
                 && om.Status == "active"
-                && (request.AllMembers
-                    || om.Role == "admin" || om.Role == "secretariat" || om.Role == "finance")
+                && (request.OnlyToUserId != null
+                    ? ps.UserId == request.OnlyToUserId
+                    : request.Roles != null
+                        ? request.Roles.Contains(om.Role)
+                        : request.AllMembers
+                            || om.Role == "admin" || om.Role == "secretariat" || om.Role == "finance")
                 && (request.ActorUserId == null || ps.UserId != request.ActorUserId)
             select ps
         ).ToListAsync(ct);

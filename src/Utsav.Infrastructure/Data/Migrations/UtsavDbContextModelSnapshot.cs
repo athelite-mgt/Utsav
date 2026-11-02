@@ -95,6 +95,13 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("org_id");
 
+                    b.Property<decimal>("PendingCollected")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("pending_collected");
+
                     b.Property<decimal?>("Projected")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
@@ -2204,6 +2211,13 @@ namespace Utsav.Infrastructure.Data.Migrations
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("org_id");
 
+                    b.Property<decimal>("PendingCollected")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("pending_collected");
+
                     b.Property<decimal?>("Projected")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(12, 2)
@@ -2321,6 +2335,13 @@ namespace Utsav.Infrastructure.Data.Migrations
                     b.Property<Guid?>("OrgId")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("org_id");
+
+                    b.Property<decimal>("PendingCollected")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("decimal(12,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("pending_collected");
 
                     b.Property<decimal?>("PriorBilled")
                         .ValueGeneratedOnAdd()
