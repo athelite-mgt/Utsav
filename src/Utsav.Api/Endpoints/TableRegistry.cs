@@ -31,7 +31,7 @@ internal static class TableRegistry
             ["ad_bookings"] = ["advertiser_id", "year_id", "ad_type", "projected", "bill_no", "billed", "billed_on", "collected", "mode", "status", "collected_on", "comments", "updated_at"],
             ["special_donations"] = ["year_id", "name", "contact", "projected", "bill_no", "billed", "collected", "mode", "collected_on", "comments", "updated_at"],
             ["offerings"] = ["year_id", "name", "contact", "offering_type", "puja_day", "value", "details", "expected_date", "received_date", "received_by", "status"],
-            ["expenses"] = ["year_id", "category", "details", "amount", "spent_on", "mode", "comment", "vendor_id", "contract_id", "bill_no"],
+            ["expenses"] = ["year_id", "category", "details", "amount", "spent_on", "mode", "comment", "vendor_id", "contract_id", "bill_no", "paid_from"],
             ["feast_expenses"] = ["year_id", "category", "details", "amount", "spent_on", "mode", "comment", "vendor_id", "bill_no"],
             ["budget_lines"] = ["year_id", "category", "notes", "forecast", "contract_amount", "sort_order"],
             ["cash_ledger"] = ["year_id", "party", "amount", "entry_date", "note"],

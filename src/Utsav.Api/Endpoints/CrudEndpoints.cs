@@ -52,12 +52,36 @@ public static class CrudEndpoints
         {
             return FeastSwitch.Off();
         }
-        if (Forbidden(user, safeTable) is { } forbidden)
+        var access = AccessFor(user, safeTable);
+        if (access == WriteAccess.Denied)
         {
-            return forbidden;
+            return Forbidden(safeTable);
+        }
+        // Someone who may only record money can file expenses, but a bill
+        // (donor, amount asked, bill number) is created by whoever runs the books.
+        if (access == WriteAccess.SubmitOnly && safeTable != "expenses")
+        {
+            return Results.Json(new { error = "Your role can record payments on an existing bill, not create one" }, statusCode: 403);
         }
 
         var supplied = SuppliedColumns(body, allowedColumns);
+        if (Approvals.IsGated(safeTable) && ValidatePaidFrom(supplied) is { } invalid)
+        {
+            return invalid;
+        }
+
+        var caller = Caller(user);
+        if (safeTable == "expenses")
+        {
+            supplied.AddRange(Approvals.ExpenseCreateColumns(caller));
+        }
+        else if (Approvals.IsIncomeTable(safeTable) && !caller.IsApprover)
+        {
+            // Collected money only ever enters through an instalment (recorded
+            // pending below); the parent's total is recomputed from those.
+            supplied.RemoveAll(c => c.Column == "collected");
+        }
+
         var id = Guid.NewGuid();
 
         // Parameter named after the real column (@category, @amount, …) rather
@@ -81,7 +105,7 @@ public static class CrudEndpoints
         parameters.AddRange(supplied.Select(c => new SqlParameter($"@{c.Column}", c.Value)));
 
         await DynamicSql.ExecuteAsync(db, sql, parameters, ct);
-        await PersistCollectionPaymentsAsync(db, user, safeTable, id, body, ct);
+        await PersistCollectionPaymentsAsync(db, caller, safeTable, id, body, ct);
         return await ReadRowAsync(db, safeTable, id, ct) is { } row
             ? Results.Ok(row)
             : Results.Json(new { error = "Not found in this organization" }, statusCode: 404);
@@ -98,30 +122,59 @@ public static class CrudEndpoints
         {
             return FeastSwitch.Off();
         }
-        if (Forbidden(user, safeTable) is { } forbidden)
+        var access = AccessFor(user, safeTable);
+        if (access == WriteAccess.Denied)
         {
-            return forbidden;
+            return Forbidden(safeTable);
         }
 
+        var caller = Caller(user);
         var supplied = SuppliedColumns(body, allowedColumns);
-        if (supplied.Count == 0)
+        var hasPayments = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("payments", out _);
+
+        if (Approvals.IsIncomeTable(safeTable) && !caller.IsApprover)
+        {
+            // Recording a payment is what they may do. What the donor was asked
+            // for, and the collected total (derived from instalments), are not theirs.
+            supplied.RemoveAll(c => c.Column == "collected"
+                || (access == WriteAccess.SubmitOnly && !Approvals.SubmitterIncomeColumns.Contains(c.Column)));
+        }
+        if (safeTable == "expenses" && !caller.IsApprover)
+        {
+            if (await Approvals.CanChangeOwnOpenExpenseAsync(db, id, caller, ct) is { } refusal)
+            {
+                return refusal;
+            }
+
+            // Fixing a sent-back claim resubmits it.
+            supplied.Add(("status", ApprovalPolicy.Pending));
+        }
+        if (Approvals.IsGated(safeTable) && ValidatePaidFrom(supplied) is { } invalid)
+        {
+            return invalid;
+        }
+        if (supplied.Count == 0 && !hasPayments)
         {
             return Results.Json(new { error = "Nothing to update" }, statusCode: 400);
         }
 
-        // Same reasoning as CreateAsync: name each parameter after its real
-        // column so the audit trail can tell "category" from "p0".
-        var assignments = string.Join(", ", supplied.Select(c => $"[{c.Column}] = @{c.Column}"));
-        var sql = $"UPDATE [{safeTable}] SET {assignments} WHERE id = @id AND org_id = @org;";
+        if (supplied.Count > 0)
+        {
+            // Same reasoning as CreateAsync: name each parameter after its real
+            // column so the audit trail can tell "category" from "p0".
+            var assignments = string.Join(", ", supplied.Select(c => $"[{c.Column}] = @{c.Column}"));
+            var sql = $"UPDATE [{safeTable}] SET {assignments} WHERE id = @id AND org_id = @org;";
 
-        var parameters = supplied
-            .Select(c => new SqlParameter($"@{c.Column}", c.Value))
-            .Append(new SqlParameter("@id", id))
-            .Append(new SqlParameter("@org", db.TenantId))
-            .ToList();
+            var parameters = supplied
+                .Select(c => new SqlParameter($"@{c.Column}", c.Value))
+                .Append(new SqlParameter("@id", id))
+                .Append(new SqlParameter("@org", db.TenantId))
+                .ToList();
 
-        await DynamicSql.ExecuteAsync(db, sql, parameters, ct);
-        await PersistCollectionPaymentsAsync(db, user, safeTable, id, body, ct);
+            await DynamicSql.ExecuteAsync(db, sql, parameters, ct);
+        }
+
+        await PersistCollectionPaymentsAsync(db, caller, safeTable, id, body, ct);
         return await ReadRowAsync(db, safeTable, id, ct) is { } row
             ? Results.Ok(row)
             : Results.Json(new { error = "Not found in this organization" }, statusCode: 404);
@@ -138,9 +191,27 @@ public static class CrudEndpoints
         {
             return FeastSwitch.Off();
         }
-        if (Forbidden(user, safeTable) is { } forbidden)
+        var access = AccessFor(user, safeTable);
+        if (access == WriteAccess.Denied)
         {
-            return forbidden;
+            return Forbidden(safeTable);
+        }
+
+        var caller = Caller(user);
+        if (!caller.IsApprover)
+        {
+            if (safeTable == "expenses" && await Approvals.CanChangeOwnOpenExpenseAsync(db, id, caller, ct) is { } refusal)
+            {
+                return refusal;
+            }
+            if (access == WriteAccess.SubmitOnly && safeTable != "expenses")
+            {
+                return Results.Json(new { error = "Your role can't delete bills" }, statusCode: 403);
+            }
+            if (Approvals.IsIncomeTable(safeTable) && await Approvals.HasLiveInstalmentsAsync(db, safeTable, id, ct))
+            {
+                return Results.Json(new { error = "This bill has payments recorded. Ask Finance to remove them first." }, statusCode: 403);
+            }
         }
 
         // Stand in for the ON DELETE SET NULL that SQL Server wouldn't accept.
@@ -161,20 +232,35 @@ public static class CrudEndpoints
         return Results.Ok(new { ok = true });
     }
 
+    private static IResult Forbidden(string safeTable) =>
+        Results.Json(new { error = $"Your role can't write to {safeTable}" }, statusCode: 403);
+
+    private static IResult? ValidatePaidFrom(List<(string Column, object Value)> supplied) =>
+        supplied.Any(c => c.Column == "paid_from" && c.Value is not ("fund" or "own_pocket"))
+            ? Results.Json(new { error = "paid_from must be 'fund' or 'own_pocket'" }, statusCode: 400)
+            : null;
+
+    private static Approvals.CallerInfo Caller(ClaimsPrincipal user) => Approvals.CallerFrom(user);
+
+    private enum WriteAccess { Denied, Full, SubmitOnly }
+
     /// <summary>
-    /// Null if the caller may write to this table, an <c>IResult</c> to
-    /// return otherwise. Every table in <see cref="TableRegistry.Tables"/> has
-    /// an entry in <see cref="TableRegistry.RequiredPermission"/> — a missing
-    /// one is treated as "nobody", not "everybody", the same fail-closed
-    /// posture as an unparseable role.
+    /// What the caller may do to this table: <c>Full</c> where their role owns it,
+    /// <c>SubmitOnly</c> where they may only record money (an Executive filing an
+    /// expense or a payment), <c>Denied</c> otherwise. Anything not registered is
+    /// treated as "nobody", the same fail-closed posture as an unparseable role.
     /// </summary>
-    private static IResult? Forbidden(ClaimsPrincipal user, string safeTable)
+    private static WriteAccess AccessFor(ClaimsPrincipal user, string safeTable)
     {
-        var permission = TableRegistry.RequiredPermission.GetValueOrDefault(safeTable, (Permission)(-1));
         var role = user.CallerRole();
-        return role is { } r && PermissionMatrix.Allows(r, permission)
-            ? null
-            : Results.Json(new { error = $"Your role can't write to {safeTable}" }, statusCode: 403);
+        if (role is not { } r) return WriteAccess.Denied;
+
+        var permission = TableRegistry.RequiredPermission.GetValueOrDefault(safeTable, (Permission)(-1));
+        if (PermissionMatrix.Allows(r, permission)) return WriteAccess.Full;
+
+        return Approvals.IsGated(safeTable) && PermissionMatrix.Allows(r, Permission.SubmitMoney)
+            ? WriteAccess.SubmitOnly
+            : WriteAccess.Denied;
     }
 
     /// <summary>The three income tables whose collections split into dated part-payments, mapped to their collection_payments.parent_type tag.</summary>
@@ -198,7 +284,7 @@ public static class CrudEndpoints
     /// payments array (so non-dialog callers are unaffected).
     /// </summary>
     private static async Task PersistCollectionPaymentsAsync(
-        UtsavDbContext db, ClaimsPrincipal user, string table, Guid parentId, JsonElement body, CancellationToken ct)
+        UtsavDbContext db, Approvals.CallerInfo caller, string table, Guid parentId, JsonElement body, CancellationToken ct)
     {
         if (!CollectionParentType.TryGetValue(table, out var parentType)) return;
         if (body.ValueKind != JsonValueKind.Object
@@ -206,11 +292,13 @@ public static class CrudEndpoints
             || payments.ValueKind != JsonValueKind.Array) return;
         if (!body.TryGetProperty("year_id", out var yearEl) || !Guid.TryParse(yearEl.GetString(), out var yearId)) return;
 
-        var userId = Guid.TryParse(user.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var uid) ? uid : (Guid?)null;
-        var userName = user.FindFirst(ClaimTypes.Name)?.Value ?? user.FindFirst(ClaimTypes.Email)?.Value;
+        // Feast money is outside the approval flow: its instalments are always approved.
+        var gated = Approvals.IsIncomeTable(table);
+        var approver = !gated || caller.IsApprover;
 
+        // Rejected instalments are history, not part of what the dialog edits.
         var existing = await db.CollectionPayments
-            .Where(p => p.ParentType == parentType && p.ParentId == parentId)
+            .Where(p => p.ParentType == parentType && p.ParentId == parentId && p.Status != ApprovalPolicy.Rejected)
             .ToListAsync(ct);
 
         var incoming = new List<SettlementFields>();
@@ -226,11 +314,24 @@ public static class CrudEndpoints
                 p.TryGetProperty("mode", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null));
         }
 
-        var (added, removed) = DiffSettlements(
-            existing.Select(e => new SettlementFields(e.Amount, e.PaidOn, e.Mode)).ToList(), incoming);
+        // An instalment that matches an existing one is left exactly as it is,
+        // so an approved payment keeps its approval when the bill is re-saved.
+        var unmatched = new List<CollectionPayment>(existing);
+        var added = new List<SettlementFields>();
+        foreach (var inc in incoming)
+        {
+            var idx = unmatched.FindIndex(e => e.Amount == inc.Amount && e.PaidOn == inc.PaidOn && e.Mode == inc.Mode);
+            if (idx >= 0) unmatched.RemoveAt(idx); else added.Add(inc);
+        }
 
-        db.CollectionPayments.RemoveRange(existing);
-        foreach (var s in incoming)
+        // Someone who cannot approve may withdraw only their own instalment that
+        // is still awaiting a decision; approved money stays until Finance removes it.
+        var removed = approver
+            ? unmatched
+            : unmatched.Where(e => ApprovalPolicy.IsOpen(e.Status) && caller.UserId is { } uid && e.RecordedByUserId == uid).ToList();
+
+        db.CollectionPayments.RemoveRange(removed);
+        foreach (var s in added)
         {
             db.CollectionPayments.Add(new CollectionPayment
             {
@@ -242,12 +343,18 @@ public static class CrudEndpoints
                 Amount = s.Amount,
                 PaidOn = s.PaidOn,
                 Mode = s.Mode,
-                RecordedByUserId = userId,
-                RecordedByName = userName,
+                RecordedByUserId = caller.UserId,
+                RecordedByName = caller.Name,
+                Status = approver ? ApprovalPolicy.Approved : ApprovalPolicy.Pending,
             });
         }
 
         await db.SaveChangesAsync(ct);
+
+        if (!approver)
+        {
+            await Approvals.RecomputeCollectedAsync(db, table, parentId, ct);
+        }
 
         // History never sees these writes otherwise — they go through EF Core
         // directly above, not DynamicSql.ExecuteAsync's audit capture. One
@@ -260,7 +367,7 @@ public static class CrudEndpoints
             {
                 await DynamicSql.AuditCollectionPaymentAsync("INSERT INTO", label, s.ToAuditFields(), db.TenantId, ct);
             }
-            foreach (var s in removed)
+            foreach (var s in removed.Select(e => new SettlementFields(e.Amount, e.PaidOn, e.Mode)))
             {
                 await DynamicSql.AuditCollectionPaymentAsync("DELETE FROM", label, s.ToAuditFields(), db.TenantId, ct);
             }
