@@ -234,6 +234,8 @@ export interface PlatformCommittee {
   created_at: string;
   members: number;
   pending_invite: boolean;
+  /** Join requests waiting; only actionable by the operator while the committee has no members. */
+  pending_requests?: number;
 }
 
 /** What creating a committee returns. The invite code is shown once and never again. */

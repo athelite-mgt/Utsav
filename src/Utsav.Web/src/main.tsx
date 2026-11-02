@@ -8,12 +8,17 @@ import { queryClient } from "@/lib/queryClient";
 import { ThemeProvider } from "@/context/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { trackVisualViewport } from "@/lib/viewport";
+import { captureInviteFromUrl } from "@/lib/invite";
 import App from "./App";
 import "./index.css";
 
 // Must run before first paint so dialogs opened immediately still measure
 // themselves correctly — it only writes CSS variables, no render involved.
 trackVisualViewport();
+
+// An invitation link carries its one-time code in the URL fragment; keep it for
+// after sign-in and take it out of the address bar.
+captureInviteFromUrl();
 
 // Sessions live in an httpOnly cookie now; drop the bearer token an earlier
 // build kept in localStorage so a credential does not linger there.

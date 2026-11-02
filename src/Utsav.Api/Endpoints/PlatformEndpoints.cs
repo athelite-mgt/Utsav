@@ -32,6 +32,8 @@ public static class PlatformEndpoints
         platform.MapGet("/committees", ListAsync);
         platform.MapPost("/committees", CreateAsync);
         platform.MapPost("/committees/{id:guid}/reissue-invite", ReissueInviteAsync);
+        platform.MapGet("/committees/{id:guid}/requests", RequestsAsync);
+        platform.MapPost("/committees/{id:guid}/requests/{memberId:guid}/approve", ApproveFirstAdminAsync);
 
         return app;
     }
@@ -52,11 +54,88 @@ public static class PlatformEndpoints
                 o.IsActive,
                 o.CreatedAt,
                 Members = db.OrgMembers.Count(m => m.OrgId == o.Id && m.Status == "active"),
+                PendingRequests = db.OrgMembers.Count(m => m.OrgId == o.Id && m.Status == "pending"),
                 PendingInvite = db.OrgInvites.Any(i => i.OrgId == o.Id && i.RedeemedAt == null && i.ExpiresAt > now),
             })
             .ToListAsync(ct);
 
         return Results.Ok(rows);
+    }
+
+    /// <summary>
+    /// Join requests waiting in a committee that has nobody to approve them. Only
+    /// listed while the committee has no active members — once it has people, its
+    /// own admins decide, and the operator sees none of it.
+    /// </summary>
+    private static async Task<IResult> RequestsAsync(Guid id, UtsavDbContext db, CancellationToken ct)
+    {
+        if (await db.OrgMembers.AnyAsync(m => m.OrgId == id && m.Status == "active", ct))
+        {
+            return Results.Ok(Array.Empty<object>());
+        }
+
+        var rows = await (
+            from m in db.OrgMembers.AsNoTracking()
+            join u in db.Users.AsNoTracking() on m.UserId equals u.Id
+            where m.OrgId == id && m.Status == "pending"
+            orderby m.CreatedAt
+            select new { member_id = m.Id, u.Email, full_name = u.FullName }
+        ).ToListAsync(ct);
+        return Results.Ok(rows);
+    }
+
+    /// <summary>
+    /// Approves a join request as the committee's FIRST administrator, and only
+    /// while it has no active members. This is the same bootstrap rule as
+    /// re-issuing an invite: with no one inside to approve, the operator can seat
+    /// the first admin, but cannot add themselves to a committee that is already
+    /// running — the platform role grants no access to a committee's books.
+    /// </summary>
+    private static async Task<IResult> ApproveFirstAdminAsync(
+        Guid id, Guid memberId, HttpContext http, UtsavDbContext db, IAuditSink audit, CancellationToken ct)
+    {
+        var org = await db.Organizations.AsNoTracking().Where(o => o.Id == id).Select(o => new { o.Id, o.Name }).SingleOrDefaultAsync(ct);
+        if (org is null)
+        {
+            return Results.Json(new { error = "No such committee." }, statusCode: 404);
+        }
+
+        if (await db.OrgMembers.AnyAsync(m => m.OrgId == id && m.Status == "active", ct))
+        {
+            return Results.Json(
+                new { error = "This committee already has members. Its own admins manage who else joins." },
+                statusCode: 409);
+        }
+
+        var email = await (
+            from m in db.OrgMembers.AsNoTracking()
+            join u in db.Users.AsNoTracking() on m.UserId equals u.Id
+            where m.Id == memberId && m.OrgId == id && m.Status == "pending"
+            select u.Email
+        ).SingleOrDefaultAsync(ct);
+        if (email is null)
+        {
+            return Results.Json(new { error = "No such pending request." }, statusCode: 404);
+        }
+
+        await db.OrgMembers
+            .Where(m => m.Id == memberId && m.OrgId == id && m.Status == "pending")
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "active").SetProperty(m => m.Role, "admin"), ct);
+
+        try
+        {
+            await audit.WriteAsync(DynamicSql.BuildEntry(
+                "org_members", "UPDATE", AuditEntry.Success, null, org.Name,
+                before: null,
+                after: new Dictionary<string, object?> { ["email"] = email.ToLowerInvariant(), ["role"] = "admin", ["status"] = "active" },
+                http, id), ct);
+        }
+        catch
+        {
+            // Audit capture is never why a real mutation fails.
+        }
+
+        return Results.Ok(new { ok = true, email });
     }
 
     private static async Task<IResult> CreateAsync(

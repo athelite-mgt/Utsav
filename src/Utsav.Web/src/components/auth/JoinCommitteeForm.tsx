@@ -3,6 +3,7 @@ import { KeyRound, Send } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { clearPendingInvite, readPendingInvite } from "@/lib/invite";
 
 /**
  * The two ways onto a committee: ask by its short name (an admin approves from
@@ -16,7 +17,9 @@ export function JoinCommitteeForm({ onJoined }: { onJoined?: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
-  const [code, setCode] = useState("");
+  // An invitation link leaves its code behind so signing in does not lose it.
+  const [invited] = useState(() => readPendingInvite());
+  const [code, setCode] = useState(() => invited ?? "");
   const [codeBusy, setCodeBusy] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
 
@@ -45,7 +48,10 @@ export function JoinCommitteeForm({ onJoined }: { onJoined?: () => void }) {
     const result = await redeemInvite(code.trim());
     setCodeBusy(false);
     if (result.error) setCodeError(result.error);
-    else onJoined?.();
+    else {
+      clearPendingInvite();
+      onJoined?.();
+    }
   }
 
   return (
@@ -72,7 +78,12 @@ export function JoinCommitteeForm({ onJoined }: { onJoined?: () => void }) {
       )}
 
       <div className="mt-6 border-t border-border pt-5 text-left">
-        <p className="text-sm font-medium">Have an invite code?</p>
+        <p className="text-sm font-medium">{invited ? "You have been invited" : "Have an invite code?"}</p>
+        {invited && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Your invitation code is filled in below. Sign in with the email address it was sent to, then press Join.
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">
           A new committee's first administrator gets a one-time code. Use it while signed in with the
           email address it was issued for.

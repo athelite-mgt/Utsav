@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandMark } from "@/components/layout/NavContent";
 import type { CreatedCommittee, PlatformCommittee } from "@/types/db";
+import { inviteLink, inviteMailto } from "@/lib/invite";
 
 interface Festival { id: string; name: string }
 
@@ -83,6 +84,21 @@ export function PlatformConsole() {
     }
   }
 
+  const approveRequests = useMutation({
+    mutationFn: async (c: PlatformCommittee) => {
+      const requests = await api.get<{ member_id: string; email: string }[]>(`/platform/committees/${c.id}/requests`);
+      let approved = 0;
+      for (const r of requests) {
+        if (!window.confirm(`Approve ${r.email} as the first administrator of ${c.name}?`)) continue;
+        await api.post(`/platform/committees/${c.id}/requests/${r.member_id}/approve`, {});
+        approved += 1;
+      }
+      return approved;
+    },
+    onSuccess: (n) => { void queryClient.invalidateQueries({ queryKey: ["platform", "committees"] }); toast.success(n ? `Approved ${n}` : "Nothing approved"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const reissue = useMutation({
     mutationFn: ({ id, to }: { id: string; to: string }) =>
       api.post<{ invite_code: string; invite_expires_at: string }>(`/platform/committees/${id}/reissue-invite`, { email: to }),
@@ -146,6 +162,16 @@ export function PlatformConsole() {
                   </code>
                   <Button variant="outline" size="sm" onClick={() => copy(created.committee.invite_code)}>
                     {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy"}
+                  </Button>
+                  <Button variant="outline" size="sm"
+                    onClick={() => copy(inviteLink(window.location.origin, created.committee.invite_code))}>
+                    <Copy /> Copy invite link
+                  </Button>
+                  <Button asChild variant="outline" size="sm">
+                    <a href={inviteMailto(created.email, created.committee.slug || "your committee",
+                      inviteLink(window.location.origin, created.committee.invite_code))}>
+                      Email it
+                    </a>
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => setCreated(null)}>Done</Button>
                 </div>
@@ -213,6 +239,11 @@ export function PlatformConsole() {
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     {c.pending_invite && <span className="rounded-full bg-gold/10 px-2 py-0.5 text-gold">Invite waiting</span>}
                     <span>{c.members} {c.members === 1 ? "member" : "members"}</span>
+                    {c.members === 0 && (c.pending_requests ?? 0) > 0 && (
+                      <Button size="sm" disabled={approveRequests.isPending} onClick={() => approveRequests.mutate(c)}>
+                        Approve {c.pending_requests} request{c.pending_requests === 1 ? "" : "s"}
+                      </Button>
+                    )}
                     {c.members === 0 && (
                       <Button variant="outline" size="sm" disabled={reissue.isPending} onClick={() => askAndReissue(c)}>
                         <KeyRound /> Re-issue invite

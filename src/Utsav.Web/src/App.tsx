@@ -1,8 +1,12 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { feastEnabled } from "@/lib/approval";
+import { readPendingInvite } from "@/lib/invite";
+import { JoinCommitteeForm } from "@/components/auth/JoinCommitteeForm";
+import { Button } from "@/components/ui/button";
+import { clearPendingInvite } from "@/lib/invite";
 import { YearProvider } from "@/context/YearContext";
 import { AppShell } from "@/components/layout/AppShell";
 import { AppLogoTile } from "@/components/brand/Athelite";
@@ -94,9 +98,23 @@ export default function App() {
   );
 }
 
+/** Where an invitation link lands once the person is signed in, whatever else they belong to. */
+function InviteJoin({ onDone }: { onDone: () => void }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-card p-6 shadow-card">
+        <JoinCommitteeForm onJoined={onDone} />
+        <Button variant="ghost" size="sm" onClick={() => { clearPendingInvite(); onDone(); }}>Not now</Button>
+      </div>
+    </div>
+  );
+}
+
 function AppContent() {
   const { loading, user, org, memberships, isPlatformAdmin, status, serverDown } = useAuth();
   const { pathname } = useLocation();
+  // Bumped when the invitation page is finished with, so the app re-reads whether one is pending.
+  const [, setInviteTick] = useState(0);
 
   // Keeps this device's push registration in step with the committee the
   // user is working in: a device is registered per committee, so it must be
@@ -106,6 +124,7 @@ function AppContent() {
   if (loading) return <FullScreenLoader />;
   if (serverDown) return <ServerOffline />;
   if (!user) return <Login />;
+  if (readPendingInvite()) return <InviteJoin onDone={() => setInviteTick((n) => n + 1)} />;
   // A platform operator gets the console: on request, and as their home when
   // they belong to no committee (otherwise they would be stranded on the
   // "join a committee" screen with nowhere to work).
