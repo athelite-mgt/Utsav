@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Check, ChevronDown, Copy, KeyRound, LogOut, Plus, UserCheck } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, Copy, KeyRound, LogOut, Plus, UserCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BrandMark } from "@/components/layout/NavContent";
-import type { CreatedCommittee, PlatformCommittee } from "@/types/db";
+import type { AppRole, CreatedCommittee, PlatformCommittee } from "@/types/db";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { inviteLink, inviteMailto } from "@/lib/invite";
 import { InviteLinkCard } from "@/components/auth/InviteLinkCard";
 
@@ -25,50 +26,80 @@ const selectClass =
  * people are in each, never any committee's figures. The capability this page
  * rests on grants no access to anyone's books.
  */
+const ROLES: { value: AppRole; label: string }[] = [
+  { value: "admin", label: "Admin" },
+  { value: "secretariat", label: "Secretariat" },
+  { value: "finance", label: "Finance" },
+  { value: "executive", label: "Executive" },
+  { value: "viewer", label: "Viewer" },
+];
+
+function RoleSelect({ value, onChange }: { value: AppRole; onChange: (r: AppRole) => void }) {
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v as AppRole)}>
+      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+      <SelectContent>{ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+}
+
 /**
- * What the operator can do for one committee. A committee with nobody in it has no one to
- * approve requests or send invitations, so the operator seats its FIRST administrator here.
- * Once it has members its own admins run access (Settings → Invitations / Access Requests),
- * and the operator sees none of it — the platform role never opens a committee's books.
+ * What the operator can do for one committee: see who is in it (names, emails and roles —
+ * never its money), approve people who asked to join, and send invitation links. Each action
+ * is recorded in that committee's own History as done by the platform operator.
  */
 function CommitteeDetail({ committee: c }: { committee: PlatformCommittee }) {
   const queryClient = useQueryClient();
   const empty = c.members === 0;
+  const members = useQuery({
+    queryKey: ["platform", "members", c.id],
+    queryFn: () => api.get<{ member_id: string; email: string; full_name: string | null; role: AppRole }[]>(`/platform/committees/${c.id}/members`),
+  });
   const requests = useQuery({
     queryKey: ["platform", "requests", c.id],
-    enabled: empty,
     queryFn: () => api.get<{ member_id: string; email: string; full_name: string | null }[]>(`/platform/committees/${c.id}/requests`),
   });
+  const [roleFor, setRoleFor] = useState<Record<string, AppRole>>({});
   const [email, setEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<AppRole>(empty ? "admin" : "viewer");
   const [invite, setInvite] = useState<{ invite_code: string; invite_expires_at: string; email: string } | null>(null);
+  const refresh = () => void queryClient.invalidateQueries({ queryKey: ["platform"] });
 
   const approve = useMutation({
-    mutationFn: (memberId: string) => api.post(`/platform/committees/${c.id}/requests/${memberId}/approve`, {}),
-    onSuccess: () => {
-      toast.success("Approved as the committee's administrator");
-      void queryClient.invalidateQueries({ queryKey: ["platform"] });
-    },
+    mutationFn: ({ id, role }: { id: string; role: AppRole }) => api.post(`/platform/committees/${c.id}/requests/${id}/approve`, { role }),
+    onSuccess: () => { toast.success("Access granted"); refresh(); },
     onError: (e) => toast.error((e as Error).message),
   });
   const send = useMutation({
     mutationFn: () => api.post<{ invite_code: string; invite_expires_at: string }>(
-      `/platform/committees/${c.id}/reissue-invite`, { email: email.trim() }),
-    onSuccess: (r) => { setInvite({ ...r, email: email.trim() }); setEmail(""); void queryClient.invalidateQueries({ queryKey: ["platform", "committees"] }); },
+      `/platform/committees/${c.id}/invites`, { email: email.trim(), role: inviteRole }),
+    onSuccess: (r) => { setInvite({ ...r, email: email.trim() }); setEmail(""); refresh(); },
     onError: (e) => toast.error((e as Error).message),
   });
 
-  if (!empty) {
-    return (
-      <div className="border-t border-border bg-muted/30 px-5 py-4 text-sm text-muted-foreground">
-        {c.name} has {c.members} {c.members === 1 ? "member" : "members"}, so its own admins approve requests and send
-        invitations (Settings → Access Requests / Invitations). The platform console never opens a running committee.
-      </div>
-    );
-  }
-
+  const people = members.data ?? [];
   const waiting = requests.data ?? [];
   return (
     <div className="space-y-5 border-t border-border bg-muted/30 px-5 py-4">
+      <section className="space-y-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><Users className="h-4 w-4" /> People in {c.name}</h3>
+        {members.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p>
+          : people.length === 0 ? <p className="text-sm text-muted-foreground">Nobody yet — approve a request or send an invitation below.</p>
+          : (
+            <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+              {people.map((m) => (
+                <li key={m.member_id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{m.full_name ?? m.email}</p>
+                    <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium capitalize text-primary">{m.role}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+      </section>
+
       <section className="space-y-2">
         <h3 className="flex items-center gap-2 text-sm font-semibold"><UserCheck className="h-4 w-4" /> Requests to join</h3>
         {waiting.length === 0 ? (
@@ -77,25 +108,32 @@ function CommitteeDetail({ committee: c }: { committee: PlatformCommittee }) {
           </p>
         ) : (
           <ul className="divide-y divide-border rounded-lg border border-border bg-card">
-            {waiting.map((r) => (
-              <li key={r.member_id} className="flex items-center justify-between gap-3 px-3 py-2">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{r.full_name ?? r.email}</p>
-                  <p className="truncate text-xs text-muted-foreground">{r.email}</p>
-                </div>
-                <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate(r.member_id)}>
-                  <Check /> Approve as administrator
-                </Button>
-              </li>
-            ))}
+            {waiting.map((r) => {
+              const role = roleFor[r.member_id] ?? (empty ? "admin" : "viewer");
+              return (
+                <li key={r.member_id} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{r.full_name ?? r.email}</p>
+                    <p className="truncate text-xs text-muted-foreground">{r.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RoleSelect value={role} onChange={(v) => setRoleFor((s) => ({ ...s, [r.member_id]: v }))} />
+                    <Button size="sm" disabled={approve.isPending} onClick={() => approve.mutate({ id: r.member_id, role })}>
+                      <Check /> Approve
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
       <section className="space-y-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="h-4 w-4" /> Invite the first administrator</h3>
+        <h3 className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="h-4 w-4" /> Send an invitation link</h3>
         <form className="flex flex-col gap-2 sm:flex-row" onSubmit={(e) => { e.preventDefault(); if (email.trim()) send.mutate(); }}>
-          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="secretary@example.org" aria-label="Email to invite" />
+          <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="person@example.org" aria-label="Email to invite" />
+          <RoleSelect value={inviteRole} onChange={setInviteRole} />
           <Button type="submit" disabled={send.isPending || !email.trim()}>Create invitation link</Button>
         </form>
         {invite && <InviteLinkCard code={invite.invite_code} email={invite.email} committee={c.name} expiresAt={invite.invite_expires_at} />}
@@ -291,7 +329,7 @@ export function PlatformConsole() {
                       </p>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      {c.members === 0 && (c.pending_requests ?? 0) > 0 && (
+                      {(c.pending_requests ?? 0) > 0 && (
                         <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-400">
                           {c.pending_requests} waiting
                         </span>

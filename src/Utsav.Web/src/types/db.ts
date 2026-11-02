@@ -234,7 +234,7 @@ export interface PlatformCommittee {
   created_at: string;
   members: number;
   pending_invite: boolean;
-  /** Join requests waiting; only actionable by the operator while the committee has no members. */
+  /** Join requests waiting for approval. */
   pending_requests?: number;
 }
 

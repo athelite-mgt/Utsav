@@ -132,18 +132,78 @@ public class PlatformFirstAdminTests(DatabaseFixture fixture)
     }
 
     [Fact]
-    public async Task The_operator_cannot_approve_into_a_committee_that_already_has_members()
+    public async Task The_operator_can_approve_into_a_running_committee_with_the_role_they_choose()
     {
-        var (userId, _) = await fixture.NewMemberAsync("sneaky", [(fixture.TenantA, "viewer", "pending")]);
+        var (userId, _) = await fixture.NewMemberAsync("op-approved", [(fixture.TenantC, "viewer", "pending")]);
         await using var identity = fixture.ContextWithNoTenant();
-        var memberId = (await identity.OrgMembers.SingleAsync(m => m.OrgId == fixture.TenantA && m.UserId == userId)).Id;
+        var memberId = (await identity.OrgMembers.SingleAsync(m => m.OrgId == fixture.TenantC && m.UserId == userId)).Id;
         using var op = fixture.ClientFor(fixture.TokenPlatform);
 
-        Assert.Equal(HttpStatusCode.Conflict,
-            (await op.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantA}/requests/{memberId}/approve", new { })).StatusCode);
-        Assert.Equal("[]", (await op.GetStringAsync($"/api/platform/committees/{fixture.TenantA}/requests")).Trim());
+        Assert.Contains(memberId.ToString(), await op.GetStringAsync($"/api/platform/committees/{fixture.TenantC}/requests"));
+        var response = await op.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantC}/requests/{memberId}/approve", new { role = "finance" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         await using var after = fixture.ContextWithNoTenant();
-        Assert.Equal("pending", (await after.OrgMembers.SingleAsync(m => m.Id == memberId)).Status);
+        var row = await after.OrgMembers.SingleAsync(m => m.Id == memberId);
+        Assert.Equal(("active", "finance"), (row.Status, row.Role));
+    }
+
+    [Fact]
+    public async Task An_approval_in_a_running_committee_defaults_to_viewer_and_refuses_an_unknown_role()
+    {
+        var (userId, _) = await fixture.NewMemberAsync("op-default", [(fixture.TenantC, "viewer", "pending")]);
+        await using var identity = fixture.ContextWithNoTenant();
+        var memberId = (await identity.OrgMembers.SingleAsync(m => m.OrgId == fixture.TenantC && m.UserId == userId)).Id;
+        using var op = fixture.ClientFor(fixture.TokenPlatform);
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await op.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantC}/requests/{memberId}/approve", new { role = "emperor" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK,
+            (await op.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantC}/requests/{memberId}/approve", new { })).StatusCode);
+        await using var after = fixture.ContextWithNoTenant();
+        Assert.Equal("viewer", (await after.OrgMembers.SingleAsync(m => m.Id == memberId)).Role);
+    }
+
+    [Fact]
+    public async Task The_operator_sees_who_is_in_a_committee_and_nothing_of_its_books()
+    {
+        using var op = fixture.ClientFor(fixture.TokenPlatform);
+
+        var members = await op.GetStringAsync($"/api/platform/committees/{fixture.TenantA}/members");
+
+        Assert.Contains("email", members, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("amount", members, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task The_operator_can_send_an_invitation_into_a_running_committee_and_it_works_once_for_that_address()
+    {
+        var email = $"op-invite-{Guid.NewGuid():N}@test.local";
+        using var op = fixture.ClientFor(fixture.TokenPlatform);
+        var created = await op.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantC}/invites", new { email, role = "secretariat" });
+        Assert.True(created.StatusCode == HttpStatusCode.OK, await created.Content.ReadAsStringAsync());
+        var code = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("invite_code").GetString()!;
+
+        var (_, token) = await fixture.NewMemberAsync("op-invitee", [], email: email);
+        using var invitee = fixture.ClientFor(token);
+        Assert.Equal(HttpStatusCode.OK, (await invitee.PostAsJsonAsync("/api/auth/redeem-invite", new { code })).StatusCode);
+
+        await using var identity = fixture.ContextWithNoTenant();
+        var role = await identity.OrgMembers.Join(identity.Users, m => m.UserId, u => u.Id, (m, u) => new { m.OrgId, m.Role, u.Email })
+            .SingleAsync(x => x.Email == email && x.OrgId == fixture.TenantC);
+        Assert.Equal("secretariat", role.Role);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await op.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantC}/invites", new { email = "bad", role = "viewer" })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Committee_admins_cannot_use_the_operator_routes()
+    {
+        using var asC = fixture.ClientFor(fixture.TokenForC);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await asC.GetAsync($"/api/platform/committees/{fixture.TenantC}/members")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await asC.PostAsJsonAsync($"/api/platform/committees/{fixture.TenantC}/invites", new { email = "x@test.local", role = "admin" })).StatusCode);
     }
 
     [Fact]

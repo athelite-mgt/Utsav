@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Utsav.Api.Authentication;
+using Utsav.Domain.Authorization;
 using Utsav.Infrastructure.Authentication;
 using Utsav.Infrastructure.Audit;
 using Utsav.Infrastructure.Data;
@@ -32,6 +34,8 @@ public static class PlatformEndpoints
         platform.MapGet("/committees", ListAsync);
         platform.MapPost("/committees", CreateAsync);
         platform.MapPost("/committees/{id:guid}/reissue-invite", ReissueInviteAsync);
+        platform.MapGet("/committees/{id:guid}/members", MembersAsync);
+        platform.MapPost("/committees/{id:guid}/invites", InviteAsync);
         platform.MapGet("/committees/{id:guid}/requests", RequestsAsync);
         platform.MapPost("/committees/{id:guid}/requests/{memberId:guid}/approve", ApproveFirstAdminAsync);
 
@@ -63,17 +67,24 @@ public static class PlatformEndpoints
     }
 
     /// <summary>
-    /// Join requests waiting in a committee that has nobody to approve them. Only
-    /// listed while the committee has no active members — once it has people, its
-    /// own admins decide, and the operator sees none of it.
+    /// Who is in a committee — name, email and role. Deliberately nothing else: the
+    /// operator can see who runs a committee (and find the admin to ask), never its money.
     /// </summary>
+    private static async Task<IResult> MembersAsync(Guid id, UtsavDbContext db, CancellationToken ct)
+    {
+        var rows = await (
+            from m in db.OrgMembers.AsNoTracking()
+            join u in db.Users.AsNoTracking() on m.UserId equals u.Id
+            where m.OrgId == id && m.Status == "active"
+            orderby m.CreatedAt
+            select new { member_id = m.Id, u.Email, full_name = u.FullName, m.Role }
+        ).ToListAsync(ct);
+        return Results.Ok(rows);
+    }
+
+    /// <summary>Join requests waiting in a committee, for the operator to approve when its own admins can't or don't.</summary>
     private static async Task<IResult> RequestsAsync(Guid id, UtsavDbContext db, CancellationToken ct)
     {
-        if (await db.OrgMembers.AnyAsync(m => m.OrgId == id && m.Status == "active", ct))
-        {
-            return Results.Ok(Array.Empty<object>());
-        }
-
         var rows = await (
             from m in db.OrgMembers.AsNoTracking()
             join u in db.Users.AsNoTracking() on m.UserId equals u.Id
@@ -84,15 +95,35 @@ public static class PlatformEndpoints
         return Results.Ok(rows);
     }
 
+    private static bool TryRole(JsonElement body, string fallback, out AppRole role)
+    {
+        var wire = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("role", out var r) && r.ValueKind == JsonValueKind.String
+            ? r.GetString() ?? fallback
+            : fallback;
+        return AppRoleExtensions.TryParseWire(wire, out role);
+    }
+
+    private static async Task AuditAsync(
+        IAuditSink audit, HttpContext http, string table, string verb, string orgName, Guid orgId,
+        Dictionary<string, object?> after, CancellationToken ct)
+    {
+        try
+        {
+            after["by_platform_operator"] = true;
+            await audit.WriteAsync(DynamicSql.BuildEntry(table, verb, AuditEntry.Success, null, orgName, before: null, after: after, http, orgId), ct);
+        }
+        catch
+        {
+            // Audit capture is never why a real mutation fails.
+        }
+    }
+
     /// <summary>
-    /// Approves a join request as the committee's FIRST administrator, and only
-    /// while it has no active members. This is the same bootstrap rule as
-    /// re-issuing an invite: with no one inside to approve, the operator can seat
-    /// the first admin, but cannot add themselves to a committee that is already
-    /// running — the platform role grants no access to a committee's books.
+    /// Approves a join request with a chosen role (default Admin for an empty committee, Viewer otherwise).
+    /// Recorded in the committee's own History as done by the platform operator.
     /// </summary>
     private static async Task<IResult> ApproveFirstAdminAsync(
-        Guid id, Guid memberId, HttpContext http, UtsavDbContext db, IAuditSink audit, CancellationToken ct)
+        Guid id, Guid memberId, JsonElement body, HttpContext http, UtsavDbContext db, IAuditSink audit, CancellationToken ct)
     {
         var org = await db.Organizations.AsNoTracking().Where(o => o.Id == id).Select(o => new { o.Id, o.Name }).SingleOrDefaultAsync(ct);
         if (org is null)
@@ -100,11 +131,10 @@ public static class PlatformEndpoints
             return Results.Json(new { error = "No such committee." }, statusCode: 404);
         }
 
-        if (await db.OrgMembers.AnyAsync(m => m.OrgId == id && m.Status == "active", ct))
+        var empty = !await db.OrgMembers.AnyAsync(m => m.OrgId == id && m.Status == "active", ct);
+        if (!TryRole(body, empty ? "admin" : "viewer", out var role))
         {
-            return Results.Json(
-                new { error = "This committee already has members. Its own admins manage who else joins." },
-                statusCode: 409);
+            return Results.Json(new { error = $"role must be one of: {string.Join(", ", AppRoleExtensions.AllWireValues)}" }, statusCode: 400);
         }
 
         var email = await (
@@ -118,24 +148,51 @@ public static class PlatformEndpoints
             return Results.Json(new { error = "No such pending request." }, statusCode: 404);
         }
 
+        var wire = role.ToWire();
         await db.OrgMembers
             .Where(m => m.Id == memberId && m.OrgId == id && m.Status == "pending")
-            .ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "active").SetProperty(m => m.Role, "admin"), ct);
+            .ExecuteUpdateAsync(s => s.SetProperty(m => m.Status, "active").SetProperty(m => m.Role, wire), ct);
 
-        try
+        await AuditAsync(audit, http, "org_members", "UPDATE", org.Name, id,
+            new Dictionary<string, object?> { ["email"] = email.ToLowerInvariant(), ["role"] = wire, ["status"] = "active" }, ct);
+        return Results.Ok(new { ok = true, email, role = wire });
+    }
+
+    /// <summary>An invitation (link + one-time code) into any committee, with a chosen role. Replaces an older one for the same address.</summary>
+    private static async Task<IResult> InviteAsync(
+        Guid id, JsonElement body, HttpContext http, UtsavDbContext db, InviteService invites, IAuditSink audit, CancellationToken ct)
+    {
+        var email = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("email", out var e) && e.ValueKind == JsonValueKind.String
+            ? e.GetString()?.Trim() ?? "" : "";
+        if (!TenantProvisioner.IsPlausibleEmail(email))
         {
-            await audit.WriteAsync(DynamicSql.BuildEntry(
-                "org_members", "UPDATE", AuditEntry.Success, null, org.Name,
-                before: null,
-                after: new Dictionary<string, object?> { ["email"] = email.ToLowerInvariant(), ["role"] = "admin", ["status"] = "active" },
-                http, id), ct);
-        }
-        catch
-        {
-            // Audit capture is never why a real mutation fails.
+            return Results.Json(new { error = "A valid email address is required." }, statusCode: 400);
         }
 
-        return Results.Ok(new { ok = true, email });
+        if (!TryRole(body, "admin", out var role))
+        {
+            return Results.Json(new { error = $"role must be one of: {string.Join(", ", AppRoleExtensions.AllWireValues)}" }, statusCode: 400);
+        }
+
+        var org = await db.Organizations.AsNoTracking().Where(o => o.Id == id).Select(o => new { o.Id, o.Name }).SingleOrDefaultAsync(ct);
+        if (org is null)
+        {
+            return Results.Json(new { error = "No such committee." }, statusCode: 404);
+        }
+
+        var now = DateTime.UtcNow;
+        var normalised = email.ToLowerInvariant();
+        var wire = role.ToWire();
+        await db.OrgInvites
+            .Where(i => i.OrgId == id && i.Email == normalised && i.RedeemedAt == null && i.ExpiresAt > now)
+            .ExecuteUpdateAsync(s => s.SetProperty(i => i.ExpiresAt, now), ct);
+
+        var code = invites.Add(id, email, wire, now);
+        await db.SaveChangesAsync(ct);
+
+        await AuditAsync(audit, http, "org_invites", "INSERT INTO", org.Name, id,
+            new Dictionary<string, object?> { ["email"] = normalised, ["role"] = wire }, ct);
+        return Results.Ok(new { invite_code = code, invite_expires_at = now + InviteService.Lifetime, email = normalised, role = wire });
     }
 
     private static async Task<IResult> CreateAsync(
