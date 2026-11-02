@@ -422,7 +422,7 @@ public static class CrudEndpoints
     /// expressed by that map's single FkTable/FkIdColumn shape. Best-effort: any
     /// failure yields null and the audit entry just shows the page without a name.
     /// </summary>
-    private static async Task<string?> ResolveSettlementLabelAsync(UtsavDbContext db, string table, Guid parentId, CancellationToken ct)
+    internal static async Task<string?> ResolveSettlementLabelAsync(UtsavDbContext db, string table, Guid parentId, CancellationToken ct)
     {
         var sql = table switch
         {

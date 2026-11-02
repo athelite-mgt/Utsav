@@ -186,6 +186,24 @@ public static class AdvanceEndpoints
         return Results.Ok((await BalanceRowAsync(db, id, ct)).FirstOrDefault());
     }
 
+    /// <summary>
+    /// Closes the advance once its approved settlements cover it, or reopens it
+    /// if they no longer do — run after anything that changes what counts.
+    /// </summary>
+    internal static async Task ReevaluateAsync(UtsavDbContext db, Guid advanceId, CancellationToken ct)
+    {
+        await DynamicSql.ExecuteAsync(db, """
+            UPDATE advances SET status = 'settled'
+             WHERE id = @id AND org_id = @org AND status = 'open'
+               AND (SELECT outstanding FROM v_advance_balances WHERE id = @id AND org_id = @org) <= 0.01
+            """, [P("@id", advanceId), Org(db)], ct);
+        await DynamicSql.ExecuteAsync(db, """
+            UPDATE advances SET status = 'open'
+             WHERE id = @id AND org_id = @org AND status = 'settled'
+               AND (SELECT outstanding FROM v_advance_balances WHERE id = @id AND org_id = @org) > 0.01
+            """, [P("@id", advanceId), Org(db)], ct);
+    }
+
     private static async Task<IResult> DeleteSettlementAsync(Guid id, UtsavDbContext db, CancellationToken ct)
     {
         var settlement = (await QueryAsync(db, "SELECT * FROM advance_settlements WHERE id=@id AND org_id=@org",
